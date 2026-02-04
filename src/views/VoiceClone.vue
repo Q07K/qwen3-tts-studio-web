@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
-import { saveVoice, getVoices, getVoicePreview, deleteVoice } from '../api/voices';
+import { saveVoice, getVoices, getVoicePreview, deleteVoice, renameVoice, exportVoice, getVoiceDetails, type VoiceDetails } from '../api/voices';
 import BaseInput from '../components/ui/BaseInput.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
-import { Upload, Mic, RefreshCw, Play, Pause, Trash2, MoreVertical, Loader } from 'lucide-vue-next';
+import { Upload, Mic, RefreshCw, Play, Pause, Trash2, MoreVertical, Loader, Edit2, Download, Info, X } from 'lucide-vue-next';
 
 const name = ref('');
 const refText = ref('');
@@ -23,6 +23,13 @@ const loadingPreview = ref<string | null>(null);
 
 // Context Menu State
 const showContextMenu = ref<string | null>(null);
+const contextMenuPos = ref({ x: 0, y: 0 });
+const scrollContainer = ref<HTMLElement | null>(null);
+
+// Details Modal State
+const showDetailsModal = ref(false);
+const detailedVoice = ref<VoiceDetails | null>(null);
+const loadingDetails = ref(false);
 
 const fetchVoices = async () => {
     loadingList.value = true;
@@ -58,7 +65,7 @@ const submit = async () => {
         await fetchVoices();
     } catch (err) {
         console.error(err);
-        alert('Failed to clone voice.');
+        alert('Failed to clone voice. ' + ((err as any).response?.data?.detail || (err as any).message));
     } finally {
         loading.value = false;
     }
@@ -145,8 +152,80 @@ const handleDelete = async (voiceName: string) => {
 };
 
 const toggleContextMenu = (voiceName: string, event: MouseEvent) => {
+    event.preventDefault(); // Prevent default context menu if right clicked, though we use left click here
     event.stopPropagation();
-    showContextMenu.value = showContextMenu.value === voiceName ? null : voiceName;
+    
+    if (showContextMenu.value === voiceName) {
+        showContextMenu.value = null;
+        return;
+    }
+
+    const target = event.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    
+    // Position menu: below the button, aligned to the right edge
+    contextMenuPos.value = {
+        x: rect.right,
+        y: rect.bottom + 4
+    };
+    
+    showContextMenu.value = voiceName;
+};
+
+const handleScroll = () => {
+    if (showContextMenu.value) {
+        closeContextMenu();
+    }
+};
+
+const handleRename = async (voiceName: string) => {
+    closeContextMenu();
+    const newName = prompt('Enter new voice name:', voiceName);
+    if (!newName || newName === voiceName) return;
+    
+    try {
+        await renameVoice(voiceName, newName);
+        await fetchVoices();
+    } catch (err: any) {
+        console.error('Failed to rename voice:', err);
+        alert('Failed to rename voice. ' + (err.response?.data?.detail || err.message));
+    }
+};
+
+const handleExport = async (voiceName: string) => {
+    closeContextMenu();
+    try {
+        const res = await exportVoice(voiceName);
+        const url = window.URL.createObjectURL(new Blob([res.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `${voiceName}.pt`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+        console.error('Failed to export voice:', err);
+        alert('Failed to export voice.');
+    }
+};
+
+const handleDetails = async (voiceName: string) => {
+    closeContextMenu();
+    detailedVoice.value = null;
+    showDetailsModal.value = true;
+    loadingDetails.value = true;
+    
+    try {
+        const res = await getVoiceDetails(voiceName);
+        detailedVoice.value = res.data;
+    } catch (err: any) {
+        console.error('Failed to get voice details:', err);
+        alert('Failed to load details.');
+        showDetailsModal.value = false;
+    } finally {
+        loadingDetails.value = false;
+    }
 };
 
 const closeContextMenu = () => {
@@ -156,10 +235,16 @@ const closeContextMenu = () => {
 onMounted(() => {
     fetchVoices();
     document.addEventListener('click', closeContextMenu);
+    if (scrollContainer.value) {
+        scrollContainer.value.addEventListener('scroll', handleScroll);
+    }
 });
 
 onUnmounted(() => {
     document.removeEventListener('click', closeContextMenu);
+    if (scrollContainer.value) {
+        scrollContainer.value.removeEventListener('scroll', handleScroll);
+    }
     if (audioElement.value) {
         audioElement.value.pause();
         audioElement.value = null;
@@ -240,7 +325,7 @@ onUnmounted(() => {
                 </button>
             </div>
             
-            <div class="panel-content scrollable">
+            <div class="panel-content scrollable" ref="scrollContainer">
                  <div v-if="loadingList" class="loading-state">
                     Loading...
                  </div>
@@ -296,18 +381,71 @@ onUnmounted(() => {
                                     class="action-icon-btn more-btn" 
                                     @click="toggleContextMenu(v, $event)"
                                     title="More options"
+                                    :class="{ 'active': showContextMenu === v }"
                                 >
                                     <MoreVertical :size="14" />
                                 </button>
-                                <div v-if="showContextMenu === v" class="context-menu">
-                                    <button class="context-item" @click.stop="handleDelete(v)">
-                                        <Trash2 :size="12" /> Delete Voice
-                                    </button>
-                                </div>
                             </div>
                         </div>
                     </li>
                  </ul>
+                 
+                 <!-- Global Context Menu -->
+                 <Teleport to="body">
+                    <div 
+                        v-if="showContextMenu" 
+                        class="context-menu fixed-menu"
+                        :style="{ top: `${contextMenuPos.y}px`, left: `${contextMenuPos.x}px` }"
+                        @click.stop
+                    >
+                        <button class="context-item" @click="handleRename(showContextMenu)">
+                            <Edit2 :size="12" /> Rename
+                        </button>
+                        <button class="context-item" @click="handleExport(showContextMenu)">
+                            <Download :size="12" /> Export
+                        </button>
+                        <button class="context-item" @click="handleDetails(showContextMenu)">
+                            <Info :size="12" /> Details
+                        </button>
+                        <div class="menu-divider"></div>
+                        <button class="context-item danger" @click="handleDelete(showContextMenu)">
+                            <Trash2 :size="12" /> Delete
+                        </button>
+                    </div>
+                 </Teleport>
+
+                 <!-- Details Modal -->
+                 <Teleport to="body">
+                     <div v-if="showDetailsModal" class="modal-overlay" @click="showDetailsModal = false">
+                         <div class="modal-content glass-panel" @click.stop>
+                             <div class="modal-header">
+                                 <h3>Voice Details</h3>
+                                 <button class="icon-btn" @click="showDetailsModal = false"><X :size="16"/></button>
+                             </div>
+                             <div class="modal-body">
+                                 <div v-if="loadingDetails" class="loading-state">Loading info...</div>
+                                 <div v-else-if="detailedVoice" class="details-grid">
+                                     <div class="detail-row">
+                                         <span class="detail-label">Name</span>
+                                         <span class="detail-value">{{ detailedVoice.name }}</span>
+                                     </div>
+                                     <div class="detail-row">
+                                         <span class="detail-label">File Size</span>
+                                         <span class="detail-value">{{ (detailedVoice.size_bytes / 1024 / 1024).toFixed(2) }} MB</span>
+                                     </div>
+                                     <div class="detail-row">
+                                         <span class="detail-label">Created</span>
+                                         <span class="detail-value">{{ new Date(detailedVoice.created_at * 1000).toLocaleString() }}</span>
+                                     </div>
+                                     <div class="detail-row">
+                                         <span class="detail-label">Modified</span>
+                                         <span class="detail-value">{{ new Date(detailedVoice.modified_at * 1000).toLocaleString() }}</span>
+                                     </div>
+                                 </div>
+                             </div>
+                         </div>
+                     </div>
+                 </Teleport>
             </div>
         </div>
     </div>
@@ -608,12 +746,92 @@ onUnmounted(() => {
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { 100% { transform: rotate(360deg); } }
 
-.action-btn {
-    width: 100%;
-    padding: 1rem;
-    font-size: 1rem;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-    font-weight: 600;
+
+
+/* Updated Context Menu for Fixed Positioning */
+.fixed-menu {
+    position: fixed;
+    left: 0;
+    top: 0;
+    
+    /* Override absolute positioning context */
+    right: auto;
+    bottom: auto;
+    
+    transform: translateX(-100%); /* Align right edge to position */
+    margin-top: 4px;
+    z-index: 9999;
+    
+    /* Ensure opacity and styling */
+    background-color: #1a1a1a; 
+    border: 1px solid #333;
+    border-radius: 4px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    padding: 4px;
+    min-width: 140px;
 }
+
+.menu-divider {
+    height: 1px;
+    background: #333;
+    margin: 4px 0;
+}
+
+.context-item.danger {
+    color: #ff4d4d;
+}
+.context-item.danger:hover {
+    background: rgba(255, 77, 77, 0.1);
+}
+
+.more-btn.active {
+    color: var(--col-primary);
+    background: rgba(255,255,255,0.05);
+}
+
+/* Modal Styles */
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+}
+.modal-content {
+    width: 400px;
+    max-width: 90vw;
+    background: #111;
+    border: 1px solid #333;
+    border-radius: var(--radius-md);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+}
+.modal-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid #222;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.modal-header h3 { margin: 0; font-size: 1rem; color: #eee; }
+.modal-body { padding: 1.5rem; }
+
+.details-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+.detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #1a1a1a;
+}
+.detail-row:last-child { border-bottom: none; }
+.detail-label { color: #666; font-size: 0.9rem; }
+.detail-value { color: #ccc; font-family: monospace; font-size: 0.9rem; }
 </style>

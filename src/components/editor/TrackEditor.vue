@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { useStudioStore } from '../../stores/studio';
-import { computed, ref, watch, onUnmounted } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { 
-  Play, Pause, FastForward, Rewind, 
-  Volume2, Scissors, Zap, Settings, 
-  MoreHorizontal, Activity, Layers
+  Play, Pause, Rewind, 
+  Volume2, Settings, 
+  Activity
 } from 'lucide-vue-next';
-import { useElementBounding, useMouseInElement } from '@vueuse/core';
+
 
 const store = useStudioStore();
 const activeBlock = computed(() => store.activeBlock);
@@ -21,7 +21,7 @@ const audioRef = ref<HTMLAudioElement | null>(null);
 
 // -- TIMELINE STATE --
 const PX_PER_SEC = ref(50);
-const timelineContainer = ref<HTMLElement | null>(null);
+
 const draggingBlockId = ref<string | null>(null);
 
 // Computed total time for timeline view
@@ -97,7 +97,7 @@ const playTimeline = () => {
              if (b.status !== 'done' || !b.audioUrl) return;
              
              // Time relative to block start
-             const blockLocalTime = (currentTime.value - b.timelineStart) * b.speed + b.startTime;
+             // const blockLocalTime = (currentTime.value - b.timelineStart) * b.speed + b.startTime;
              
              // Check if inside playable range
              if (currentTime.value >= b.timelineStart && 

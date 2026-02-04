@@ -199,7 +199,7 @@ export const useStudioStore = defineStore('studio', () => {
                     const res = await generateBatchVoice({
                         texts: chunk.map(b => b.text),
                         voice_name: voice,
-                        language: 'korean'
+                        language: 'auto'
                     });
 
                     const data = res.data;

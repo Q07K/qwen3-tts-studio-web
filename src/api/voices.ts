@@ -22,11 +22,7 @@ export const saveVoice = async (name: string, referenceText: string, referenceAu
     formData.append('reference_text', referenceText);
     formData.append('reference_audio', referenceAudio);
 
-    return apiClient.post('/api/voices/save', formData, {
-        headers: {
-            'Content-Type': 'multipart/form-data'
-        }
-    });
+    return apiClient.post('/api/voices/save', formData);
 };
 
 export const getVoices = async () => {
@@ -42,11 +38,32 @@ export const generateBatchVoice = async (req: BatchVoiceGenerateRequest) => {
 };
 
 export const getVoicePreview = async (name: string) => {
-    return apiClient.get(`/api/voices/${encodeURIComponent(name)}/preview`, { 
-        responseType: 'blob' 
+    return apiClient.get(`/api/voices/${encodeURIComponent(name)}/preview`, {
+        responseType: 'blob'
     });
 };
 
 export const deleteVoice = async (name: string) => {
     return apiClient.delete(`/api/voices/${encodeURIComponent(name)}`);
+};
+
+export const renameVoice = async (name: string, newName: string) => {
+    return apiClient.put(`/api/voices/${encodeURIComponent(name)}/rename`, { new_name: newName });
+};
+
+export const exportVoice = async (name: string) => {
+    return apiClient.get(`/api/voices/${encodeURIComponent(name)}/export`, {
+        responseType: 'blob'
+    });
+};
+
+export interface VoiceDetails {
+    name: string;
+    size_bytes: number;
+    created_at: number;
+    modified_at: number;
+}
+
+export const getVoiceDetails = async (name: string) => {
+    return apiClient.get<VoiceDetails>(`/api/voices/${encodeURIComponent(name)}/details`);
 };

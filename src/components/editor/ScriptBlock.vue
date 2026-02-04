@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { computed } from 'vue';
 import { useStudioStore } from '../../stores/studio';
 import { Play, Pause, Trash2 } from 'lucide-vue-next';
 
