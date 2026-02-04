@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { saveVoice, getVoices } from '../api/voices';
+import { ref, onMounted, onUnmounted } from 'vue';
+import { saveVoice, getVoices, getVoicePreview, deleteVoice } from '../api/voices';
 import BaseInput from '../components/ui/BaseInput.vue';
 import BaseButton from '../components/ui/BaseButton.vue';
-import { Upload, Mic, RefreshCw } from 'lucide-vue-next';
+import { Upload, Mic, RefreshCw, Play, Pause, Trash2, MoreVertical, Loader } from 'lucide-vue-next';
 
 const name = ref('');
 const refText = ref('');
@@ -13,6 +13,16 @@ const loading = ref(false);
 const loadingList = ref(false);
 const errorMsg = ref('');
 const voices = ref<string[]>([]);
+
+// Audio Player State
+const currentPlayingVoice = ref<string | null>(null);
+const isPlaying = ref(false);
+const audioProgress = ref(0);
+const audioElement = ref<HTMLAudioElement | null>(null);
+const loadingPreview = ref<string | null>(null);
+
+// Context Menu State
+const showContextMenu = ref<string | null>(null);
 
 const fetchVoices = async () => {
     loadingList.value = true;
@@ -54,7 +64,107 @@ const submit = async () => {
     }
 };
 
-onMounted(fetchVoices);
+// Audio Player Functions
+const playPreview = async (voiceName: string) => {
+    // 이미 재생 중인 경우 일시정지
+    if (currentPlayingVoice.value === voiceName && isPlaying.value) {
+        pauseAudio();
+        return;
+    }
+
+    // 다른 음성을 재생 중이면 정지
+    if (audioElement.value) {
+        audioElement.value.pause();
+        audioElement.value = null;
+    }
+
+    loadingPreview.value = voiceName;
+    currentPlayingVoice.value = voiceName;
+    audioProgress.value = 0;
+
+    try {
+        const res = await getVoicePreview(voiceName);
+        const blob = new Blob([res.data], { type: 'audio/wav' });
+        const url = URL.createObjectURL(blob);
+
+        audioElement.value = new Audio(url);
+        audioElement.value.addEventListener('timeupdate', updateProgress);
+        audioElement.value.addEventListener('ended', onAudioEnded);
+        audioElement.value.addEventListener('loadedmetadata', () => {
+            loadingPreview.value = null;
+        });
+
+        await audioElement.value.play();
+        isPlaying.value = true;
+    } catch (err) {
+        console.error('Failed to play preview:', err);
+        loadingPreview.value = null;
+        currentPlayingVoice.value = null;
+    }
+};
+
+const pauseAudio = () => {
+    if (audioElement.value) {
+        audioElement.value.pause();
+        isPlaying.value = false;
+    }
+};
+
+const updateProgress = () => {
+    if (audioElement.value) {
+        const progress = (audioElement.value.currentTime / audioElement.value.duration) * 100;
+        audioProgress.value = progress;
+    }
+};
+
+const onAudioEnded = () => {
+    isPlaying.value = false;
+    audioProgress.value = 0;
+    currentPlayingVoice.value = null;
+};
+
+const handleDelete = async (voiceName: string) => {
+    if (!confirm(`'${voiceName}' 보이스를 삭제하시겠습니까?`)) return;
+
+    try {
+        await deleteVoice(voiceName);
+        // 재생 중이면 정지
+        if (currentPlayingVoice.value === voiceName) {
+            if (audioElement.value) {
+                audioElement.value.pause();
+                audioElement.value = null;
+            }
+            currentPlayingVoice.value = null;
+            isPlaying.value = false;
+        }
+        await fetchVoices();
+    } catch (err) {
+        console.error('Failed to delete voice:', err);
+        alert('Failed to delete voice.');
+    }
+};
+
+const toggleContextMenu = (voiceName: string, event: MouseEvent) => {
+    event.stopPropagation();
+    showContextMenu.value = showContextMenu.value === voiceName ? null : voiceName;
+};
+
+const closeContextMenu = () => {
+    showContextMenu.value = null;
+};
+
+onMounted(() => {
+    fetchVoices();
+    document.addEventListener('click', closeContextMenu);
+});
+
+onUnmounted(() => {
+    document.removeEventListener('click', closeContextMenu);
+    if (audioElement.value) {
+        audioElement.value.pause();
+        audioElement.value = null;
+    }
+});
 </script>
 
 <template>
@@ -138,7 +248,19 @@ onMounted(fetchVoices);
                     <p>No custom voices yet.</p>
                  </div>
                  <ul v-else class="voice-list">
-                    <li v-for="v in voices" :key="v" class="voice-item">
+                    <li 
+                        v-for="v in voices" 
+                        :key="v" 
+                        class="voice-item"
+                        :class="{ 'is-playing': currentPlayingVoice === v }"
+                    >
+                        <!-- Progress Bar Background -->
+                        <div 
+                            v-if="currentPlayingVoice === v" 
+                            class="progress-bar" 
+                            :style="{ width: audioProgress + '%' }"
+                        ></div>
+                        
                         <div class="voice-avatar">
                             <span>{{ v.charAt(0).toUpperCase() }}</span>
                         </div>
@@ -147,7 +269,42 @@ onMounted(fetchVoices);
                             <span class="voice-type">Custom Model</span>
                         </div>
                         <div class="voice-actions">
-                            <!-- Placeholder for delete/edit -->
+                            <!-- Play/Pause Button -->
+                            <button 
+                                class="action-icon-btn play-btn" 
+                                @click.stop="playPreview(v)"
+                                :disabled="loadingPreview === v"
+                                :title="currentPlayingVoice === v && isPlaying ? 'Pause' : 'Play Preview'"
+                            >
+                                <Loader v-if="loadingPreview === v" :size="14" class="spin" />
+                                <Pause v-else-if="currentPlayingVoice === v && isPlaying" :size="14" />
+                                <Play v-else :size="14" />
+                            </button>
+                            
+                            <!-- Delete Button -->
+                            <button 
+                                class="action-icon-btn delete-btn" 
+                                @click.stop="handleDelete(v)"
+                                title="Delete"
+                            >
+                                <Trash2 :size="14" />
+                            </button>
+                            
+                            <!-- More Options -->
+                            <div class="more-menu-wrapper">
+                                <button 
+                                    class="action-icon-btn more-btn" 
+                                    @click="toggleContextMenu(v, $event)"
+                                    title="More options"
+                                >
+                                    <MoreVertical :size="14" />
+                                </button>
+                                <div v-if="showContextMenu === v" class="context-menu">
+                                    <button class="context-item" @click.stop="handleDelete(v)">
+                                        <Trash2 :size="12" /> Delete Voice
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </li>
                  </ul>
@@ -310,32 +467,144 @@ onMounted(fetchVoices);
 /* Voice List */
 .voice-list {
     list-style: none; padding: 0; margin: 0;
-    display: flex; flex-direction: column; gap: 8px;
+    display: flex; flex-direction: column; gap: 4px;
 }
 .voice-item {
-    display: flex; align-items: center; gap: 12px;
-    padding: 10px;
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px;
     background: #111;
     border: 1px solid transparent;
     border-radius: var(--radius-sm);
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.15s ease;
+    position: relative;
+    overflow: hidden;
 }
 .voice-item:hover {
+    border-color: var(--col-border);
+    background: #161616;
+}
+.voice-item:hover .voice-actions {
+    opacity: 1;
+}
+.voice-item.is-playing {
     border-color: var(--col-primary);
-    background: #151515;
+    background: rgba(var(--hue-primary), 0.08);
 }
+
+/* Progress Bar */
+.progress-bar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    background: rgba(var(--hue-primary), 0.15);
+    pointer-events: none;
+    transition: width 0.1s linear;
+}
+
 .voice-avatar {
-    width: 32px; height: 32px; background: #222; color: #888;
+    width: 28px; height: 28px; background: #222; color: #777;
     border-radius: 4px; display: flex; align-items: center; justify-content: center;
-    font-weight: bold; font-size: 0.8rem;
+    font-weight: 600; font-size: 0.75rem;
+    flex-shrink: 0;
+    z-index: 1;
 }
-.voice-info { display: flex; flex-direction: column; flex: 1; min-width: 0; }
-.voice-name { color: #ddd; font-size: 0.9rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.voice-type { color: #555; font-size: 0.75rem; }
+.voice-info { 
+    display: flex; flex-direction: column; flex: 1; min-width: 0; 
+    gap: 1px;
+    z-index: 1;
+}
+.voice-name { 
+    color: #ddd; font-size: 0.85rem; font-weight: 500; 
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    letter-spacing: 0.01em;
+}
+.voice-type { 
+    color: #555; font-size: 0.7rem; 
+    letter-spacing: 0.02em;
+}
+
+/* Voice Actions */
+.voice-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    z-index: 1;
+}
+.voice-item:hover .voice-actions,
+.voice-item.is-playing .voice-actions {
+    opacity: 1;
+}
+
+.action-icon-btn {
+    width: 26px; height: 26px;
+    display: flex; align-items: center; justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.action-icon-btn:hover {
+    background: #222;
+    color: #aaa;
+}
+.action-icon-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.play-btn:hover {
+    color: var(--col-primary);
+}
+.delete-btn:hover {
+    color: #ff4d4d;
+}
+
+/* Context Menu */
+.more-menu-wrapper {
+    position: relative;
+}
+.context-menu {
+    position: absolute;
+    right: 0;
+    bottom: 100%;
+    margin-bottom: 4px;
+    background: #1f1f1f;
+    border: 1px solid #333;
+    border-radius: var(--radius-sm);
+    min-width: 150px;
+    padding: 4px;
+    z-index: 1000;
+    box-shadow: 0 -4px 16px rgba(0,0,0,0.5);
+}
+.context-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 10px;
+    background: none;
+    border: none;
+    color: #ccc;
+    font-size: 0.8rem;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.15s;
+}
+.context-item:hover {
+    background: #2a2a2a;
+    color: #ff4d4d;
+}
 
 .empty-state { text-align: center; padding: 2rem; color: #444; font-size: 0.9rem; }
-.icon-btn { background: none; border: none; color: inherit; cursor: pointer; }
+.loading-state { text-align: center; padding: 2rem; color: #555; font-size: 0.85rem; }
+.icon-btn { background: none; border: none; color: inherit; cursor: pointer; padding: 4px; }
+.icon-btn:hover { color: var(--col-primary); }
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { 100% { transform: rotate(360deg); } }
 

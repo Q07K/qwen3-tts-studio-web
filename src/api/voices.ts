@@ -40,3 +40,13 @@ export const generateVoice = async (req: VoiceGenerateRequest) => {
 export const generateBatchVoice = async (req: BatchVoiceGenerateRequest) => {
     return apiClient.post<{ [key: string]: string }>('/api/voices/generate/batch', req);
 };
+
+export const getVoicePreview = async (name: string) => {
+    return apiClient.get(`/api/voices/${encodeURIComponent(name)}/preview`, { 
+        responseType: 'blob' 
+    });
+};
+
+export const deleteVoice = async (name: string) => {
+    return apiClient.delete(`/api/voices/${encodeURIComponent(name)}`);
+};
