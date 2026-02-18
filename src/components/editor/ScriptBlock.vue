@@ -32,6 +32,20 @@ const togglePlay = () => {
 // Remove local audio watchers/refs since we use global engine
 // Watch for speed changes is handled by global engine check
 
+const languages = [
+  { label: 'Auto', value: 'auto' },
+  { label: 'Korean', value: 'korean' },
+  { label: 'English', value: 'english' },
+  { label: 'Japanese', value: 'japanese' },
+  { label: 'Chinese', value: 'chinese' },
+  { label: 'French', value: 'french' },
+  { label: 'German', value: 'german' },
+  { label: 'Italian', value: 'italian' },
+  { label: 'Portuguese', value: 'portuguese' },
+  { label: 'Russian', value: 'russian' },
+  { label: 'Spanish', value: 'spanish' },
+];
+
 </script>
 
 <template>
@@ -55,6 +69,13 @@ const togglePlay = () => {
       >
         <option value="" disabled>Select Voice</option>
         <option v-for="v in voices" :key="v" :value="v">{{ v }}</option>
+      </select>
+      <select
+        v-model="block.language"
+        class="voice-select"
+        @click.stop
+      >
+        <option v-for="l in languages" :key="l.value" :value="l.value">{{ l.label }}</option>
       </select>
       <div class="spacer"></div>
       <button class="delete-btn" @click.stop="store.removeBlock(block.id)">

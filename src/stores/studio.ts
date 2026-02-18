@@ -6,6 +6,7 @@ export interface ScriptBlockData {
     id: string;
     text: string;
     voice: string;
+    language: string;
     audioUrl?: string;
     status: 'idle' | 'loading' | 'done' | 'error';
     speed: number;
@@ -34,7 +35,7 @@ function generateUUID(): string {
 
 export const useStudioStore = defineStore('studio', () => {
     const blocks = ref<ScriptBlockData[]>([]);
-    const batchLimit = ref(5);
+    const batchLimit = ref(1);
     const globalVoice = ref(''); // Default voice for new blocks
     const userDuration = ref(0); // User override for project length
 
@@ -83,6 +84,7 @@ export const useStudioStore = defineStore('studio', () => {
             id: generateUUID(),
             text: '',
             voice: globalVoice.value || '',
+            language: 'auto',
             status: 'idle',
             speed: 1.0,
             startTime: 0,
@@ -158,7 +160,7 @@ export const useStudioStore = defineStore('studio', () => {
             const res = await generateVoice({
                 text: block.text,
                 voice_name: block.voice,
-                language: 'korean'
+                language: block.language || 'auto'
             });
             const blob = res.data; // Axios response data
             const url = URL.createObjectURL(blob);
@@ -186,11 +188,17 @@ export const useStudioStore = defineStore('studio', () => {
         const groups = new Map<string, ScriptBlockData[]>();
         for (const t of targets) {
             if (!t.voice) continue;
-            if (!groups.has(t.voice)) groups.set(t.voice, []);
-            groups.get(t.voice)!.push(t);
+            const lang = t.language || 'auto';
+            const key = `${t.voice}|${lang}`;
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key)!.push(t);
         }
 
-        for (const [voice, group] of groups) {
+        for (const [key, group] of groups) {
+            const parts = key.split('|');
+            const voice = parts[0]!;
+            const language = parts[1] || 'auto';
+
             for (let i = 0; i < group.length; i += batchLimit.value) {
                 const chunk = group.slice(i, i + batchLimit.value);
                 chunk.forEach(b => b.status = 'loading');
@@ -199,7 +207,7 @@ export const useStudioStore = defineStore('studio', () => {
                     const res = await generateBatchVoice({
                         texts: chunk.map(b => b.text),
                         voice_name: voice,
-                        language: 'auto'
+                        language: language
                     });
 
                     const data = res.data;
