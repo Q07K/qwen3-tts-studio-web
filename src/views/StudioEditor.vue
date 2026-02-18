@@ -3,13 +3,30 @@ import { onMounted, ref, computed, onUnmounted, watch } from 'vue';
 import { useStudioStore } from '../stores/studio';
 import { getVoices } from '../api/voices';
 import ScriptBlock from '../components/editor/ScriptBlock.vue';
-import BaseButton from '../components/ui/BaseButton.vue';
 import { 
     Plus, Layers, Play, Pause, 
     Rewind, ZoomIn, ZoomOut,
-    SkipForward, Download
+    SkipForward, Download,
+    Loader2,
+    Monitor as MonitorIcon,
+    Terminal,
+    Clock
 } from 'lucide-vue-next';
 import { exportAudioProject } from '../utils/audioExport';
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from '@/components/ui/resizable';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 const store = useStudioStore();
 const voices = ref<string[]>([]);
@@ -22,7 +39,6 @@ const handleExport = async () => {
         await exportAudioProject(store.blocks, store.projectDuration);
     } catch (e) {
         console.error("Export failed", e);
-        // Using alert for simplicity, could be a toast
         alert("Export failed. Please ensure all audio is generated.");
     } finally {
         isExporting.value = false;
@@ -31,12 +47,8 @@ const handleExport = async () => {
 
 // Timeline State
 const PX_PER_SEC = ref(50);
-// Viewport duration should be enough to show the project + some buffer
 const timelineDuration = computed(() => Math.max(store.projectDuration + 5, 20));
 
-// Link to Global Store
-
-// Link to Global Store
 const isPlaying = computed({
     get: () => store.isPlaying,
     set: (val) => store.isPlaying = val
@@ -47,36 +59,30 @@ const currentTime = computed({
 });
 
 // Audio Engine State
-const audioCache = new Map<string, HTMLAudioElement>(); // Preloaded audios
-const activeAudios = new Map<string, HTMLAudioElement>(); // Currently playing
+const audioCache = new Map<string, HTMLAudioElement>(); 
+const activeAudios = new Map<string, HTMLAudioElement>(); 
 let animationFrameId = 0;
 let lastTimestamp = 0;
 
-// Preload Audios when blocks change (Watch deeply)
+// Preload Audios
 watch(() => store.blocks, (newBlocks) => {
-    // 1. Remove stale audios from cache
     const currentIds = new Set(newBlocks.map(b => b.id));
     for (const [id, audio] of audioCache.entries()) {
         if (!currentIds.has(id)) {
-            // If playing, pause first
             if (!audio.paused) audio.pause();
             audioCache.delete(id);
             activeAudios.delete(id);
         }
     }
     
-    // 2. Add/Update new audios
     newBlocks.forEach(block => {
         if (!block.audioUrl || block.status !== 'done') return;
-        
-        // Check cache
         let audio = audioCache.get(block.id);
         if (!audio) {
             audio = new Audio(block.audioUrl);
-            audio.preload = 'auto'; // Force preload
+            audio.preload = 'auto';
             audioCache.set(block.id, audio);
         } else if (audio.src !== block.audioUrl) {
-            // URL changed
             audio.src = block.audioUrl;
             audio.load();
         }
@@ -103,13 +109,10 @@ onUnmounted(() => {
     stopPlayback();
 });
 
-// --- AUDIO ENGINE ---
 const stopPlayback = () => {
     store.isPlaying = false;
     cancelAnimationFrame(animationFrameId);
-    activeAudios.forEach(audio => {
-        audio.pause();
-    });
+    activeAudios.forEach(audio => audio.pause());
     activeAudios.clear();
 };
 
@@ -117,7 +120,6 @@ const togglePlayback = () => {
     store.isPlaying = !store.isPlaying;
 };
 
-// Monitor Play State Change
 watch(() => store.isPlaying, (playing) => {
     if (playing) {
         lastTimestamp = performance.now();
@@ -131,115 +133,62 @@ watch(() => store.isPlaying, (playing) => {
 
 const tick = () => {
     if (!store.isPlaying) return;
-    
     const now = performance.now();
     const delta = (now - lastTimestamp) / 1000;
     lastTimestamp = now;
     
-    // Increment time (local update then sync store)
     const nextTime = store.currentTime + delta;
     store.seek(nextTime);
     
-    // Check for sequence end (add buffer)
     if (nextTime > timelineDuration.value + 1.0) {
         stopPlayback();
         store.seek(0);
         return;
     }
 
-    // Process blocks
     store.blocks.forEach(block => {
         if (!block.audioUrl || block.status !== 'done') return;
-        
-        // Force number types to avoid any string concatenation weirdness
         const start = Number(block.timelineStart) || 0;
         const speed = Number(block.speed) || 1;
         const trimStart = Number(block.startTime) || 0;
         const trimEnd = Number(block.endTime) || 0;
-        
         const clipDuration = (trimEnd - trimStart) / speed;
         const end = start + clipDuration;
-        
-        // Check using STORE time
         const cTime = store.currentTime;
         const isInside = cTime >= start && cTime < end;
         
-        // Use cached audio if available
         let audio = audioCache.get(block.id);
-        if (!audio) {
-            // Lazy load if missed by watcher
-            audio = new Audio(block.audioUrl);
-            audio.preload = 'auto';
-            audioCache.set(block.id, audio);
-        }
-
-        if (isInside) {
+        if (isInside && audio) {
             const expectedLocalTime = (cTime - start) * speed + trimStart;
-            
-            // Should be playing?
             if (!activeAudios.has(block.id)) {
-                // START PLAYING
                 audio.playbackRate = speed;
-                audio.volume = 1.0;
-                
-                // Safe seek
-                if (Number.isFinite(expectedLocalTime)) {
-                    audio.currentTime = Math.max(0, expectedLocalTime);
-                }
-                
-                const p = audio.play();
-                if (p !== undefined) {
-                    p.catch(e => console.warn("Play interrupted", e));
-                }
-                
+                audio.currentTime = Math.max(0, expectedLocalTime);
+                audio.play().catch(() => {});
                 activeAudios.set(block.id, audio);
             } else {
-                // ALREADY PLAYING - SYNC
-                if (audio.paused && audio.readyState >= 3) {
-                     audio.play().catch(() => {});
-                }
-
-                // Sync Speed
-                if (Math.abs(audio.playbackRate - speed) > 0.01) {
-                    audio.playbackRate = speed;
-                }
-                
-                // Only sync time if readyState is enough
+                if (audio.paused && audio.readyState >= 3) audio.play();
+                if (Math.abs(audio.playbackRate - speed) > 0.01) audio.playbackRate = speed;
                 if (audio.readyState >= 2) { 
                     const diff = audio.currentTime - expectedLocalTime;
-                    // drift correction: loose if < 0.2s, hard snap if > 0.2s
-                    if (Math.abs(diff) > 0.2) {
-                        audio.currentTime = expectedLocalTime;
-                    }
+                    if (Math.abs(diff) > 0.2) audio.currentTime = expectedLocalTime;
                 }
             }
-        } else {
-            // Outside of block - STOP
-            if (activeAudios.has(block.id)) {
-                // If it is playing, pause it
-                if (activeAudios.get(block.id) && !activeAudios.get(block.id)?.paused) {
-                    activeAudios.get(block.id)?.pause();
-                }
-                activeAudios.delete(block.id);
-            }
+        } else if (activeAudios.has(block.id)) {
+             activeAudios.get(block.id)?.pause();
+             activeAudios.delete(block.id);
         }
     });
-
     animationFrameId = requestAnimationFrame(tick);
 };
 
 const seek = (time: number) => {
     store.seek(Math.max(0, Math.min(time, timelineDuration.value)));
-    // If playing, tick will pick it up
 };
 
-
-// --- DRAG & DROP LOGIC ---
+// Drag & Drop
 const handleBlockMouseDown = (e: MouseEvent, blockId: string) => {
     e.stopPropagation();
     store.toggleSelection(blockId, false);
-    
-    // Simple Drag Implementation
     const startX = e.clientX;
     const block = store.blocks.find(b => b.id === blockId);
     if(!block) return;
@@ -254,27 +203,22 @@ const handleBlockMouseDown = (e: MouseEvent, blockId: string) => {
     const onUp = () => {
         window.removeEventListener('mousemove', onMove);
         window.removeEventListener('mouseup', onUp);
-        // Sync script order with visual order
         store.sortBlocksByTime();
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
 };
 
-// --- DURATION DRAG LOGIC ---
+// End marker drag
 const handleDurationDrag = (e: MouseEvent) => {
     e.stopPropagation();
     const startX = e.clientX;
     const initialDuration = store.projectDuration;
-
     const onMove = (ev: MouseEvent) => {
         const deltaPx = ev.clientX - startX;
         const deltaSec = deltaPx / PX_PER_SEC.value;
-        // Snap to nearest 0.1s
-        const rawNew = Math.max(0, initialDuration + deltaSec);
-        store.userDuration = Math.round(rawNew * 10) / 10;
+        store.userDuration = Math.round(Math.max(0, initialDuration + deltaSec) * 10) / 10;
     };
-
     const onUp = () => {
         window.removeEventListener('mousemove', onMove);
         window.removeEventListener('mouseup', onUp);
@@ -282,416 +226,244 @@ const handleDurationDrag = (e: MouseEvent) => {
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
 };
-
 </script>
 
 <template>
-  <div class="studio-layout">
-    
-    <!-- TOP AREA: SCRIPT (LEFT) + MONITOR (RIGHT) -->
-    <div class="top-area">
-        
-        <!-- Script / Source Panel -->
-        <div class="panel script-panel glass-panel">
-            <div class="panel-header">
-                <h3>Script Editor</h3>
-                <div class="actions">
-                    <BaseButton variant="secondary" @click.stop="store.addBlock()" class="xs-btn">
-                      <Plus :size="14" /> Add Block
-                    </BaseButton>
+  <div class="h-[calc(100vh-3.5rem)] flex flex-col bg-background overflow-hidden">
+    <ResizablePanelGroup direction="vertical" class="flex-1">
+      <ResizablePanel :default-size="70" :min-size="40">
+        <ResizablePanelGroup direction="horizontal">
+          <!-- Script Panel -->
+          <ResizablePanel :default-size="40" :min-size="30">
+            <div class="h-full flex flex-col border-r">
+              <div class="flex items-center justify-between px-4 py-2 border-b bg-muted/40">
+                <div class="flex items-center gap-2">
+                  <Terminal class="h-4 w-4 text-muted-foreground" />
+                  <h3 class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Script Editor</h3>
                 </div>
+                <Button variant="ghost" size="xs" @click.stop="store.addBlock()" class="h-7 px-2 text-xs">
+                  <Plus class="h-3 w-3 mr-1" /> Add Block
+                </Button>
+              </div>
+              
+              <ScrollArea class="flex-1" @click="store.toggleSelection('', false)">
+                <div class="p-6 space-y-4">
+                  <div v-for="(block, index) in store.blocks" :key="block.id" class="relative group">
+                    <ScriptBlock :blockId="block.id" :voices="voices" />
+                    <!-- Insert divider -->
+                    <div 
+                      class="absolute -bottom-2 left-0 right-0 h-4 z-10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                      @click.stop="store.addBlock(index + 1)"
+                    >
+                      <div class="w-full h-[1px] bg-primary/40"></div>
+                      <div class="absolute bg-primary text-primary-foreground rounded-full p-0.5">
+                        <Plus class="h-3 w-3" />
+                      </div>
+                    </div>
+                  </div>
+                  <div 
+                    class="border-2 border-dashed border-muted rounded-lg p-8 flex flex-col items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors cursor-pointer"
+                    @click.stop="store.addBlock()"
+                  >
+                    <Plus class="h-6 w-6 mb-2" />
+                    <span class="text-sm font-medium">New Script Block</span>
+                  </div>
+                </div>
+              </ScrollArea>
+
+              <div class="p-4 border-t bg-muted/20">
+                <Button class="w-full shadow-md" @click.stop="store.generateBatch">
+                  <Layers class="h-4 w-4 mr-2" />
+                  {{ store.selectedBlocks.length > 0 ? `Generate Selected (${store.selectedBlocks.length})` : 'Generate All Tracks' }}
+                </Button>
+              </div>
             </div>
-            
-            <div class="panel-content script-list-content" @click="store.toggleSelection('', false)">
-                 <div v-for="(block, index) in store.blocks" :key="block.id" class="block-wrapper">
-                   <ScriptBlock :blockId="block.id" :voices="voices" />
-                   <!-- Quick Add Zone -->
-                   <div class="add-divider" @click.stop="store.addBlock(index + 1)">
-                      <div class="line"></div>
-                      <div class="plus-icon"><Plus :size="14"/></div>
-                      <div class="line"></div>
+          </ResizablePanel>
+
+          <ResizableHandle with-handle />
+
+          <!-- Monitor Panel -->
+          <ResizablePanel :default-size="60">
+            <div class="h-full flex flex-col">
+              <div class="flex items-center justify-between px-4 py-2 border-b bg-muted/40">
+                <div class="flex items-center gap-2">
+                  <MonitorIcon class="h-4 w-4 text-muted-foreground" />
+                  <h3 class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Monitor</h3>
+                </div>
+                <div class="flex items-center gap-3">
+                  <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-background border text-[11px] font-mono tabular-nums">
+                    <span class="text-primary font-bold">{{ currentTime.toFixed(2) }}s</span>
+                    <span class="text-muted-foreground">/</span>
+                    <span class="text-muted-foreground">{{ store.projectDuration.toFixed(2) }}s</span>
+                  </div>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger as-child>
+                        <Button 
+                          variant="outline" 
+                          size="icon" 
+                          class="h-7 w-7"
+                          @click="handleExport" 
+                          :disabled="isExporting || store.blocks.length === 0"
+                        >
+                          <Loader2 v-if="isExporting" class="h-3.5 w-3.5 animate-spin" />
+                          <Download v-else class="h-3.5 w-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Export Project</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+              </div>
+
+              <div class="flex-1 bg-black relative flex items-center justify-center overflow-hidden">
+                <div class="absolute inset-0 opacity-20 pointer-events-none" style="background-image: radial-gradient(circle at center, #222 1px, transparent 1px); background-size: 20px 20px;"></div>
+                
+                <div class="z-10 text-center space-y-4">
+                  <div v-if="isPlaying" class="flex items-center justify-center gap-1 h-12">
+                     <div v-for="i in 12" :key="i" class="w-1 bg-primary rounded-full animate-pulse" :style="{ height: `${10 + Math.random() * 30}px`, animationDelay: `${i * 0.1}s` }"></div>
+                  </div>
+                  <h2 class="text-3xl font-bold tracking-tighter text-white/90">
+                    {{ isPlaying ? 'PLAYING' : 'READY' }}
+                  </h2>
+                  <p class="text-sm text-muted-foreground font-mono">{{ currentTime.toFixed(3) }}</p>
+                </div>
+
+                <!-- Active block text preview -->
+                <div class="absolute bottom-8 left-1/2 -translate-x-1/2 w-full max-w-xl px-4">
+                   <div v-if="activeAudios.size > 0" class="bg-black/60 backdrop-blur-md border border-white/10 p-4 rounded-lg text-center shadow-2xl">
+                     <p class="text-white/80 text-lg leading-relaxed italic">
+                        "{{ store.blocks.find(b => activeAudios.has(b.id))?.text }}"
+                     </p>
                    </div>
                 </div>
+              </div>
+
+              <div class="h-16 border-t flex items-center justify-center gap-8 bg-muted/20">
+                <Button variant="ghost" size="icon" @click="seek(0)" class="h-10 w-10 text-muted-foreground hover:text-foreground">
+                  <Rewind class="h-5 w-5 fill-current" />
+                </Button>
+                <Button variant="default" size="icon" @click="togglePlayback" class="h-12 w-12 rounded-full shadow-lg scale-110">
+                  <Pause v-if="isPlaying" class="h-6 w-6 fill-current" />
+                  <Play v-else class="h-6 w-6 fill-current ml-1" />
+                </Button>
+                <Button variant="ghost" size="icon" @click="seek(timelineDuration)" class="h-10 w-10 text-muted-foreground hover:text-foreground">
+                  <SkipForward class="h-5 w-5 fill-current" />
+                </Button>
+              </div>
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      </ResizablePanel>
+
+      <ResizableHandle with-handle />
+
+      <!-- Timeline Panel -->
+      <ResizablePanel :default-size="30" :min-size="15">
+        <div class="h-full flex flex-col bg-muted/10">
+          <div class="flex items-center justify-between px-4 py-1.5 border-b bg-muted/40">
+            <div class="flex items-center gap-2">
+              <Clock class="h-4 w-4 text-muted-foreground" />
+              <h3 class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Timeline</h3>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="flex items-center border rounded bg-background overflow-hidden">
+                <Button variant="ghost" size="icon" class="h-6 w-6 rounded-none p-0" @click="PX_PER_SEC = Math.max(10, PX_PER_SEC - 10)">
+                  <ZoomOut class="h-3 w-3" />
+                </Button>
+                <Separator orientation="vertical" class="h-4" />
+                <span class="px-2 text-[10px] font-mono font-bold">{{ PX_PER_SEC }}px/s</span>
+                <Separator orientation="vertical" class="h-4" />
+                <Button variant="ghost" size="icon" class="h-6 w-6 rounded-none p-0" @click="PX_PER_SEC += 10">
+                  <ZoomIn class="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+          </div>
+          
+          <div class="flex-1 relative overflow-auto scrollbar-hide">
+            <!-- Ruler -->
+            <div class="sticky top-0 z-30 flex border-b bg-background/80 backdrop-blur">
+              <div class="w-32 shrink-0 border-r bg-muted/50"></div>
+              <div class="flex-1 relative h-8" :style="{ width: (timelineDuration * PX_PER_SEC) + 'px' }" @click="(e: any) => seek(e.offsetX / PX_PER_SEC)">
+                <div v-for="i in Math.floor(timelineDuration) + 1" :key="i" class="absolute top-0 bottom-0 border-l border-muted/50" :style="{ left: ((i-1) * PX_PER_SEC) + 'px' }">
+                  <span v-if="(i-1) % 5 === 0" class="absolute top-1 left-2 text-[10px] font-mono font-bold text-muted-foreground/60">{{ i-1 }}s</span>
+                </div>
                 
-                <div class="empty-pad" @click.stop="store.addBlock()">
-                   <p>+ New Block</p>
+                <!-- Playhead (Top Part) -->
+                <div class="absolute inset-y-0 w-0.5 bg-primary z-50 pointer-events-none" :style="{ left: (currentTime * PX_PER_SEC) + 'px' }">
+                  <div class="absolute -top-1 -left-[5px] w-3 h-3 bg-primary rounded-full shadow-lg"></div>
                 </div>
+              </div>
             </div>
-            
-            <div class="panel-footer">
-                <BaseButton variant="primary" @click.stop="store.generateBatch">
-                  <Layers :size="16" /> {{ store.selectedBlocks.length > 0 ? `Generate Selected` : 'Generate All' }}
-                </BaseButton>
-            </div>
-        </div>
 
-        <!-- Monitor / Preview Panel -->
-        <div class="panel monitor-panel glass-panel">
-            <div class="panel-header">
-                <h3>Monitor</h3>
-                <div class="monitor-header-right" style="display:flex; align-items:center; gap: 1rem;">
-                    <div class="time-readout">
-                        {{ currentTime.toFixed(2) }}s <span class="dim">/ {{ store.projectDuration.toFixed(2) }}s</span>
-                    </div>
-                    <!-- Reset Duration Button if overridden -->
-                    <button v-if="store.userDuration > 0 && store.userDuration > store.totalDuration" 
-                            class="icon-btn xs-btn" 
-                            @click="store.userDuration = 0"
-                            title="Reset to content length"
-                            style="font-size:0.7rem; color:var(--col-warning)">
-                            Reset End
-                    </button>
-                    <button class="icon-btn" @click="handleExport" :disabled="isExporting || store.blocks.length === 0" title="Export to WAV">
-                        <span v-if="isExporting" style="font-size:0.7rem">Saving...</span>
-                        <Download v-else :size="16" />
-                    </button>
+            <div class="flex flex-col">
+              <div class="flex min-h-[160px]">
+                <div class="w-32 shrink-0 border-r bg-muted/20 flex flex-col py-2">
+                  <div class="px-3 py-1 flex items-center gap-2 group hover:bg-muted/40 transition-colors cursor-default">
+                    <div class="w-2 h-2 rounded-full bg-primary/60"></div>
+                    <span class="text-[11px] font-semibold text-muted-foreground/80">Voice Track</span>
+                  </div>
                 </div>
-            </div>
-            <div class="monitor-screen">
-                <!-- Visualizer Mockup -->
-                <div class="viz-container">
-                    <div class="grid-overlay"></div>
-                    <div class="center-marker"></div>
-                    
-                    <div class="active-text-overlay">
-                        <!-- Show text of currently playing block -->
-                        <transition name="fade">
-                            <h2 v-if="isPlaying && activeAudios.size > 0">
-                                Playing...
-                            </h2>
-                            <h2 v-else-if="!isPlaying">
-                                Ready
-                            </h2>
-                        </transition>
-                    </div>
-                </div>
-            </div>
-            <div class="monitor-controls">
-                <button class="transport-btn" @click="seek(0)"><Rewind :size="18"/></button>
-                <button class="transport-btn main" @click="togglePlayback">
-                    <Pause v-if="isPlaying" :size="24" fill="currentColor"/>
-                    <Play v-else :size="24" fill="currentColor"/>
-                </button>
-                <button class="transport-btn" @click="seek(timelineDuration)"><SkipForward :size="18"/></button>
-            </div>
-        </div>
-        
-    </div>
+                
+                <div class="flex-1 relative min-h-full py-2 bg-grid-slate-900/[0.04]" :style="{ width: (timelineDuration * PX_PER_SEC) + 'px' }">
+                  <!-- Global playhead line -->
+                  <div class="absolute inset-y-0 w-[1px] bg-primary/40 z-20 pointer-events-none" :style="{ left: (currentTime * PX_PER_SEC) + 'px' }"></div>
 
-    <!-- BOTTOM AREA: TIMELINE -->
-    <div class="bottom-area glass-panel">
-        <div class="timeline-header">
-            <div class="tools-left">
-                <span class="active">Timeline 1</span>
-            </div>
-            <div class="tools-right">
-                <button class="icon-btn" @click="PX_PER_SEC = Math.max(10, PX_PER_SEC - 10)"><ZoomOut :size="16"/></button>
-                <span class="zoom-val">{{ PX_PER_SEC }}%</span>
-                <button class="icon-btn" @click="PX_PER_SEC += 10"><ZoomIn :size="16"/></button>
-            </div>
-        </div>
-        
-        <div class="timeline-body">
-             <!-- Ruler Container (Aligned with Tracks) -->
-             <div class="timeline-ruler-row">
-                 <div class="ruler-gutter"></div>
-                 <div class="ruler-x" :style="{ width: (timelineDuration * PX_PER_SEC) + 'px' }" @click="(e) => seek(e.offsetX / PX_PER_SEC)">
-                    <div v-for="i in Math.floor(timelineDuration)" :key="i" class="tick" :style="{ left: (i * PX_PER_SEC) + 'px' }">
-                        <span class="num" v-if="i % 5 === 0">{{ i }}s</span>
-                    </div>
-                    <!-- Playhead -->
-                     <div class="playhead" :style="{ left: (currentTime * PX_PER_SEC) + 'px' }">
-                        <div class="head"></div>
-                        <div class="line"></div>
-                    </div>
-
-                    <!-- Project End Marker -->
-                    <div class="project-end-marker" 
-                         :style="{ left: (store.projectDuration * PX_PER_SEC) + 'px' }"
-                         @mousedown="handleDurationDrag"
-                         @click.stop
-                         title="Drag to adjust project duration"
+                  <!-- Clips -->
+                  <div class="relative h-24">
+                    <div 
+                      v-for="block in store.blocks" 
+                      :key="block.id"
+                      class="absolute top-2 h-14 rounded-md border-2 transition-shadow cursor-move flex flex-col overflow-hidden shadow-sm"
+                      :class="{ 
+                        'border-primary bg-primary/10 shadow-lg ring-2 ring-primary/20 z-10': block.selected,
+                        'border-muted-foreground/40 bg-card/60': !block.selected,
+                        'opacity-50 grayscale': !block.audioUrl
+                      }"
+                      :style="{
+                        left: (block.timelineStart * PX_PER_SEC) + 'px',
+                        width: Math.max(10, ((block.endTime - block.startTime) / block.speed) * PX_PER_SEC) + 'px'
+                      }"
+                      @mousedown="(e) => handleBlockMouseDown(e, block.id)"
                     >
-                        <div class="end-flag">END</div>
-                        <div class="end-line"></div>
-                    </div>
-
-                 </div>
-             </div>
-
-             <!-- Tracks -->
-             <div class="tracks-viewport">
-                 <div class="track-row">
-                      <div class="track-label">Voice</div>
-                      <div class="track-lane" :style="{ width: (timelineDuration * PX_PER_SEC) + 'px' }">
-                           <!-- Grid Lines -->
-                           <div class="grid-bg" :style="{ backgroundSize: `${PX_PER_SEC}px 100%` }"></div>
-                           
-                           <!-- Clips -->
-                           <div 
-                                v-for="block in store.blocks" 
-                                :key="block.id"
-                                class="timeline-clip"
-                                :class="{ 
-                                    selected: block.selected,
-                                    'has-audio': !!block.audioUrl
-                                }"
-                                :style="{
-                                    left: (block.timelineStart * PX_PER_SEC) + 'px',
-                                    width: Math.max(2, ((block.endTime - block.startTime) / block.speed) * PX_PER_SEC) + 'px'
-                                }"
-                                @mousedown="(e) => handleBlockMouseDown(e, block.id)"
-                           >
-                                <div class="clip-name">{{ block.text.substring(0, 20) || 'New Clip' }}</div>
-                                <div class="clip-wave" v-if="block.audioUrl"></div>
-                                
-                                <!-- Selection Ring -->
-                                <div class="sel-ring" v-if="block.selected"></div>
-                           </div>
+                      <div class="px-2 py-1 bg-muted/40 text-[10px] font-bold truncate border-b border-muted/50 group-hover:bg-muted transition-colors">
+                        {{ block.voice || 'Unknown' }}
                       </div>
-                 </div>
-             </div>
+                      <div class="flex-1 p-1 flex items-center gap-1 overflow-hidden">
+                        <div v-if="block.audioUrl" class="w-full flex items-end gap-[1px] h-full opacity-60">
+                           <div v-for="i in 20" :key="i" class="flex-1 bg-primary/80" :style="{ height: `${20 + Math.random() * 80}%` }"></div>
+                        </div>
+                        <p v-else class="text-[9px] text-muted-foreground italic px-1">Generating...</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Project End Marker -->
+                  <div 
+                    class="absolute inset-y-0 w-2 group cursor-ew-resize z-40 transition-colors hover:bg-primary/20" 
+                    :style="{ left: (store.projectDuration * PX_PER_SEC) + 'px' }"
+                    @mousedown="handleDurationDrag"
+                  >
+                    <div class="absolute top-0 -translate-x-1/2 bg-yellow-500 text-black font-bold text-[9px] px-1 rounded shadow-md">END</div>
+                    <div class="h-full w-[1px] bg-yellow-500/60 shadow-lg ml-[0.5px]"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-    </div>
-    
+      </ResizablePanel>
+    </ResizablePanelGroup>
   </div>
 </template>
 
-<style scoped>
-.studio-layout {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  gap: 4px;
-  overflow: hidden;
+<style>
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
-
-.top-area {
-    flex: 1;
-    display: flex;
-    gap: 4px;
-    min-height: 0; 
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
-
-.panel {
-    display: flex;
-    flex-direction: column;
-}
-
-.script-panel {
-    flex: 0 0 40%; /* 40% Width for Script */
-    min-width: 350px;
-    max-width: 50%;
-    border-radius: 0;
-}
-
-.monitor-panel {
-    flex: 1;
-    border-radius: 0;
-    border-left: 1px solid var(--col-border);
-}
-
-.bottom-area {
-    height: 300px; /* Fixed height for timeline (like AE) */
-    flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
-    border-radius: 0;
-    border-top: 1px solid var(--col-border);
-}
-
-
-/* Common Panel Styles */
-.panel-header {
-    height: 40px;
-    flex-shrink: 0;
-    border-bottom: 1px solid var(--col-border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 1rem;
-    background: rgba(255,255,255,0.02);
-}
-.panel-header h3 { font-size: 0.9rem; color: var(--col-text-muted); text-transform: uppercase; margin: 0; letter-spacing: 1px; }
-
-.panel-content {
-    flex: 1;
-    overflow-y: auto;
-    padding: 1rem;
-}
-.panel-footer {
-    padding: 0.8rem;
-    border-top: 1px solid var(--col-border);
-}
-
-/* Script List Specifics */
-.script-list-content { padding: 0.5rem; }
-.actions { gap: 0.5rem; display: flex; }
-.xs-btn { font-size: 0.75rem; padding: 4px 8px; }
-
-.add-divider {
-  display: flex; align-items: center; height: 16px; cursor: pointer; opacity: 0; transition: opacity 0.2s;
-}
-.add-divider:hover { opacity: 1; }
-.line { flex: 1; height: 1px; background: var(--col-primary); }
-.plus-icon { background: var(--col-primary); border-radius: 50%; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; color: white; }
-
-.empty-pad {
-  padding: 1rem; text-align: center; color: var(--col-text-muted);
-  border: 1px dashed rgba(255,255,255,0.1); border-radius: var(--radius-sm); margin-top: 1rem; cursor: pointer; opacity: 0.5;
-}
-.empty-pad:hover { opacity: 1; border-color: var(--col-primary); }
-
-
-/* Monitor Specifics */
-.monitor-screen {
-    flex: 1;
-    background: #000;
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-}
-.monitor-controls {
-    height: 50px;
-    border-top: 1px solid var(--col-border);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 1.5rem;
-    background: #0a0a0a;
-}
-.viz-container {
-    width: 100%; height: 100%; position: relative;
-    background: radial-gradient(circle, #1a1a2e 0%, #000000 70%);
-}
-.grid-overlay {
-    position: absolute; inset: 0;
-    background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-                      linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
-    background-size: 50px 50px;
-}
-.active-text-overlay {
-    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-    color: white; text-shadow: 0 4px 20px black; pointer-events: none;
-}
-.transport-btn {
-    background: transparent; color: var(--col-text-muted); border: none; cursor: pointer;
-    transition: all 0.2s;
-}
-.transport-btn:hover { color: white; transform: scale(1.1); }
-.transport-btn.main {
-    color: var(--col-primary);
-    filter: drop-shadow(0 0 8px rgba(124, 92, 255, 0.5));
-}
-
-
-/* Timeline Specifics */
-.timeline-header {
-    height: 32px;
-    background: #111;
-    border-bottom: 1px solid var(--col-border);
-    display: flex; justify-content: space-between; align-items: center; padding: 0 0.5rem;
-}
-.tools-left .active { font-size: 0.8rem; color: var(--col-primary); border-bottom: 2px solid var(--col-primary); padding: 0 0.5rem 8px 0.5rem; display: inline-block; }
-.tools-right { display: flex; gap: 0.5rem; align-items: center; font-size: 0.75rem; color: #666; }
-.icon-btn { background: none; border: none; color: inherit; cursor: pointer; }
-.icon-btn:hover { color: white; }
-
-.timeline-body {
-    flex: 1;
-    background: #080808;
-    position: relative;
-    overflow-x: auto;
-    overflow-y: hidden;
-}
-.timeline-ruler-row {
-    display: flex;
-    border-bottom: 1px solid #333;
-    background: #080808; 
-    /* Ensures it stays atop if we did sticky, but here just layout */
-}
-.ruler-gutter {
-    width: 100px;
-    flex-shrink: 0;
-    background: #111; /* Match track label bg */
-    border-right: 1px solid #333;
-}
-.ruler-x {
-    height: 24px; position: relative; cursor: pointer;
-    /* Border bottom handled by row */
-}
-.tick { position: absolute; top:0; bottom:0; width:1px; background: #333; }
-.tick .num { position:absolute; top:4px; left:4px; font-size:0.6rem; color:#666; }
-
-.playhead {
-    position: absolute; top: 0; bottom: -300px; width: 1px; z-index: 100; pointer-events: none;
-}
-.playhead .head {
-    position: absolute; top: 0; left: -6px; width: 0; height: 0; 
-    border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 8px solid var(--col-primary);
-}
-.playhead .line {
-    position: absolute; top: 0; bottom: 0; left: -1px; width: 2px; background: var(--col-primary);
-}
-
-.tracks-viewport {
-    padding-top: 4px;
-}
-.track-row {
-    display: flex;
-    height: 48px;
-    border-bottom: 1px solid #222;
-}
-.track-label {
-    width: 100px; flex-shrink: 0; background: #111; border-right: 1px solid #333;
-    display: flex; align-items: center; padding-left: 1rem; font-size: 0.8rem; color: #888;
-}
-.track-lane {
-    position: relative;
-    flex-grow: 1;
-    background: #0a0a0a;
-}
-.grid-bg { 
-    position: absolute; inset:0; 
-    background-image: linear-gradient(90deg, #1a1a1a 1px, transparent 1px);
-    /* background-size set inline */
-}
-
-.timeline-clip {
-    position: absolute; top: 4px; bottom: 4px;
-    border-radius: 4px;
-    cursor: grab;
-    background: #2a2a2a; border: 1px solid #444;
-    overflow: hidden; padding: 0 6px;
-    display: flex; align-items: center;
-}
-.timeline-clip.has-audio {
-    background: rgba(var(--hue-primary), 0.3);
-    border-color: var(--col-primary);
-}
-.timeline-clip.selected {
-    border-color: white;
-    z-index: 10;
-}
-.clip-name { font-size: 0.75rem; color: #ccc; white-space: nowrap; }
-
-
-.project-end-marker {
-    position: absolute; top: 0; bottom: -300px; width: 10px; z-index: 90; cursor: ew-resize; transform: translateX(-50%);
-}
-.project-end-marker:hover .end-line { background: var(--col-warning); }
-.project-end-marker:hover .end-flag { background: var(--col-warning); color: #000; }
-
-.end-flag {
-    position: absolute; top: 0; left: 50%; transform: translateX(-50%);
-    background: #444; color: #aaa; font-size: 0.6rem; padding: 2px 4px; border-radius: 2px;
-    white-space: nowrap; font-weight: bold;
-}
-.end-line {
-    position: absolute; top: 16px; bottom: 0; left: 50%; width: 1px; background: #444;
-    border-left: 1px dashed #666;
-}
-
 </style>

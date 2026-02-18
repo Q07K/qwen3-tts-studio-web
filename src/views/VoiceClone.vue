@@ -1,9 +1,33 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
 import { saveVoice, getVoices, getVoicePreview, deleteVoice, renameVoice, exportVoice, getVoiceDetails, type VoiceDetails } from '../api/voices';
-import BaseInput from '../components/ui/BaseInput.vue';
-import BaseButton from '../components/ui/BaseButton.vue';
-import { Upload, Mic, RefreshCw, Play, Pause, Trash2, MoreVertical, Loader, Edit2, Download, Info, X } from 'lucide-vue-next';
+import { 
+  Upload, Mic, RefreshCw, Play, Pause, Trash2, 
+  MoreVertical, Loader2, Edit2, Download, Info,
+  FileAudio
+} from 'lucide-vue-next';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 const name = ref('');
 const refText = ref('');
@@ -20,11 +44,6 @@ const isPlaying = ref(false);
 const audioProgress = ref(0);
 const audioElement = ref<HTMLAudioElement | null>(null);
 const loadingPreview = ref<string | null>(null);
-
-// Context Menu State
-const showContextMenu = ref<string | null>(null);
-const contextMenuPos = ref({ x: 0, y: 0 });
-const scrollContainer = ref<HTMLElement | null>(null);
 
 // Details Modal State
 const showDetailsModal = ref(false);
@@ -58,7 +77,6 @@ const submit = async () => {
     loading.value = true;
     try {
         await saveVoice(name.value, refText.value, file.value);
-        // Reset
         name.value = '';
         refText.value = '';
         file.value = null;
@@ -73,13 +91,11 @@ const submit = async () => {
 
 // Audio Player Functions
 const playPreview = async (voiceName: string) => {
-    // 이미 재생 중인 경우 일시정지
     if (currentPlayingVoice.value === voiceName && isPlaying.value) {
         pauseAudio();
         return;
     }
 
-    // 다른 음성을 재생 중이면 정지
     if (audioElement.value) {
         audioElement.value.pause();
         audioElement.value = null;
@@ -135,7 +151,6 @@ const handleDelete = async (voiceName: string) => {
 
     try {
         await deleteVoice(voiceName);
-        // 재생 중이면 정지
         if (currentPlayingVoice.value === voiceName) {
             if (audioElement.value) {
                 audioElement.value.pause();
@@ -151,35 +166,7 @@ const handleDelete = async (voiceName: string) => {
     }
 };
 
-const toggleContextMenu = (voiceName: string, event: MouseEvent) => {
-    event.preventDefault(); // Prevent default context menu if right clicked, though we use left click here
-    event.stopPropagation();
-    
-    if (showContextMenu.value === voiceName) {
-        showContextMenu.value = null;
-        return;
-    }
-
-    const target = event.currentTarget as HTMLElement;
-    const rect = target.getBoundingClientRect();
-    
-    // Position menu: below the button, aligned to the right edge
-    contextMenuPos.value = {
-        x: rect.right,
-        y: rect.bottom + 4
-    };
-    
-    showContextMenu.value = voiceName;
-};
-
-const handleScroll = () => {
-    if (showContextMenu.value) {
-        closeContextMenu();
-    }
-};
-
 const handleRename = async (voiceName: string) => {
-    closeContextMenu();
     const newName = prompt('Enter new voice name:', voiceName);
     if (!newName || newName === voiceName) return;
     
@@ -193,7 +180,6 @@ const handleRename = async (voiceName: string) => {
 };
 
 const handleExport = async (voiceName: string) => {
-    closeContextMenu();
     try {
         const res = await exportVoice(voiceName);
         const url = window.URL.createObjectURL(new Blob([res.data]));
@@ -211,7 +197,6 @@ const handleExport = async (voiceName: string) => {
 };
 
 const handleDetails = async (voiceName: string) => {
-    closeContextMenu();
     detailedVoice.value = null;
     showDetailsModal.value = true;
     loadingDetails.value = true;
@@ -228,23 +213,11 @@ const handleDetails = async (voiceName: string) => {
     }
 };
 
-const closeContextMenu = () => {
-    showContextMenu.value = null;
-};
-
 onMounted(() => {
     fetchVoices();
-    document.addEventListener('click', closeContextMenu);
-    if (scrollContainer.value) {
-        scrollContainer.value.addEventListener('scroll', handleScroll);
-    }
 });
 
 onUnmounted(() => {
-    document.removeEventListener('click', closeContextMenu);
-    if (scrollContainer.value) {
-        scrollContainer.value.removeEventListener('scroll', handleScroll);
-    }
     if (audioElement.value) {
         audioElement.value.pause();
         audioElement.value = null;
@@ -253,585 +226,227 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <div class="clone-studio-layout">
-        <!-- Main Work Area (Left) -->
-        <div class="work-panel glass-panel">
-            <div class="panel-header">
-                <h3>Voice Cloning</h3>
+  <div class="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
+    <div class="flex flex-col md:flex-row gap-8 items-start">
+      <!-- Voice Cloning Form -->
+      <Card class="flex-1 w-full shadow-lg border-muted">
+        <CardHeader>
+          <CardTitle class="text-2xl font-bold tracking-tight">Voice Cloning</CardTitle>
+          <CardDescription>
+            Create a high-fidelity digital clone of any voice from a short audio sample.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form @submit.prevent="submit" class="space-y-6">
+            <div class="space-y-2">
+              <Label for="voice-name">Voice Name</Label>
+              <Input 
+                id="voice-name" 
+                v-model="name" 
+                placeholder="e.g. My Narrator" 
+                required 
+                class="bg-muted/50 border-muted"
+              />
+            </div>
+
+            <div class="space-y-2">
+              <Label>Reference Audio</Label>
+              <div 
+                class="group relative flex flex-col items-center justify-center border-2 border-dashed border-muted rounded-lg p-10 transition-colors hover:bg-muted/30 cursor-pointer"
+                :class="{ 'border-primary/50 bg-primary/5': !!file }"
+                @click="fileInput?.click()"
+              >
+                <input type="file" ref="fileInput" @change="handleFileChange" accept="audio/*" hidden />
+                
+                <template v-if="!file">
+                  <div class="p-3 bg-muted rounded-full group-hover:scale-110 transition-transform">
+                    <Upload class="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <div class="mt-4 text-center">
+                    <p class="text-sm font-medium">Click to upload reference audio</p>
+                    <p class="text-xs text-muted-foreground mt-1">WAV or MP3 (Max 10MB)</p>
+                  </div>
+                </template>
+                
+                <template v-else>
+                  <div class="p-3 bg-primary/20 rounded-full">
+                    <FileAudio class="h-6 w-6 text-primary" />
+                  </div>
+                  <div class="mt-4 text-center">
+                    <p class="text-sm font-semibold truncate max-w-[200px]">{{ file.name }}</p>
+                    <p class="text-xs text-primary font-medium mt-1">{{ (file.size / 1024 / 1024).toFixed(2) }} MB</p>
+                  </div>
+                  <Button variant="ghost" size="sm" class="mt-4 text-xs">Change File</Button>
+                </template>
+              </div>
+            </div>
+
+            <div class="space-y-2">
+              <Label for="transcript">Transcript Reference</Label>
+              <textarea 
+                id="transcript"
+                v-model="refText" 
+                class="flex min-h-[120px] w-full rounded-md border border-muted bg-muted/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-mono" 
+                placeholder="Enter the exact text spoken in the audio for better alignment..." 
+                required
+              ></textarea>
+              <p class="text-[0.8rem] text-muted-foreground italic">Accuracy is key for high quality cloning.</p>
+            </div>
+
+            <Button type="submit" :disabled="loading" class="w-full h-12 text-base font-semibold">
+              <Loader2 v-if="loading" class="mr-2 h-4 w-4 animate-spin" />
+              <Mic v-else class="mr-2 h-4 w-4" />
+              Start Cloning Process
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <!-- Voice Library -->
+      <Card class="w-full md:w-[400px] shadow-lg border-muted">
+        <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-4">
+          <div>
+            <CardTitle class="text-xl font-bold tracking-tight">Voice Library</CardTitle>
+            <CardDescription>Your collection of custom models.</CardDescription>
+          </div>
+          <Button variant="ghost" size="icon" @click="fetchVoices" :disabled="loadingList" class="h-8 w-8">
+            <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': loadingList }" />
+          </Button>
+        </CardHeader>
+        <CardContent class="p-0">
+          <ScrollArea class="h-[600px] px-6">
+            <div v-if="loadingList && !voices.length" class="flex flex-col items-center justify-center h-40 space-y-4">
+              <Loader2 class="h-8 w-8 animate-spin text-muted-foreground" />
+              <p class="text-sm text-muted-foreground">Refreshing library...</p>
             </div>
             
-            <div class="panel-content scrollable">
-                <form @submit.prevent="submit" class="clone-form">
-                    <div class="form-section">
-                        <label class="section-label">Identity</label>
-                        <BaseInput v-model="name" label="Voice Name" placeholder="e.g. My Narrator" required class="stealth-input"/>
-                    </div>
-
-                    <div class="form-section">
-                        <label class="section-label">Reference Audio</label>
-                        
-                        <div class="audio-uploader" :class="{ 'has-file': !!file }" @click="fileInput?.click()">
-                            <input type="file" ref="fileInput" @change="handleFileChange" accept="audio/*" hidden />
-                            
-                            <div v-if="!file" class="upload-placeholder">
-                                <div class="icon-circle">
-                                    <Upload :size="20" />
-                                </div>
-                                <div class="text-group">
-                                    <span class="main-text">Upload Reference Audio</span>
-                                    <span class="sub-text">WAV or MP3 (Max 10MB)</span>
-                                </div>
-                            </div>
-                            
-                            <div v-else class="file-ready">
-                                <div class="file-icon">
-                                    <Mic :size="20" />
-                                </div>
-                                <div class="file-details">
-                                    <span class="filename">{{ file.name }}</span>
-                                    <span class="filesize">{{ (file.size / 1024 / 1024).toFixed(2) }} MB</span>
-                                </div>
-                                <div class="change-btn">Change</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-section flex-grow">
-                        <label class="section-label">Transcript Reference</label>
-                        <textarea 
-                            v-model="refText" 
-                            class="stealth-textarea" 
-                            placeholder="Enter the exact text spoken in the audio for better alignment..." 
-                            required
-                        ></textarea>
-                        <p class="hint">Accuracy is key for high quality cloning.</p>
-                    </div>
-
-                    <div class="form-actions">
-                        <BaseButton type="submit" :loading="loading" variant="primary" class="action-btn">
-                            <Mic :size="16" /> Start Cloning Process
-                        </BaseButton>
-                    </div>
-                </form>
+            <div v-else-if="voices.length === 0" class="flex flex-col items-center justify-center h-40 text-center space-y-2">
+              <Mic class="h-8 w-8 text-muted-foreground opacity-20" />
+              <p class="text-sm text-muted-foreground">No custom voices yet.</p>
             </div>
-        </div>
 
-        <!-- Library Panel (Right) -->
-        <div class="library-panel glass-panel">
-            <div class="panel-header">
-                <h3>Voice Library</h3>
-                <button class="icon-btn" @click="fetchVoices" :disabled="loadingList">
-                    <RefreshCw :size="14" :class="{ 'spin': loadingList }" />
-                </button>
-            </div>
-            
-            <div class="panel-content scrollable" ref="scrollContainer">
-                 <div v-if="loadingList" class="loading-state">
-                    Loading...
-                 </div>
-                 <div v-else-if="voices.length === 0" class="empty-state">
-                    <p>No custom voices yet.</p>
-                 </div>
-                 <ul v-else class="voice-list">
-                    <li 
-                        v-for="v in voices" 
-                        :key="v" 
-                        class="voice-item"
-                        :class="{ 'is-playing': currentPlayingVoice === v }"
-                    >
-                        <!-- Progress Bar Background -->
-                        <div 
-                            v-if="currentPlayingVoice === v" 
-                            class="progress-bar" 
-                            :style="{ width: audioProgress + '%' }"
-                        ></div>
-                        
-                        <div class="voice-avatar">
-                            <span>{{ v.charAt(0).toUpperCase() }}</span>
-                        </div>
-                        <div class="voice-info">
-                            <span class="voice-name">{{ v }}</span>
-                            <span class="voice-type">Custom Model</span>
-                        </div>
-                        <div class="voice-actions">
-                            <!-- Play/Pause Button -->
-                            <button 
-                                class="action-icon-btn play-btn" 
-                                @click.stop="playPreview(v)"
-                                :disabled="loadingPreview === v"
-                                :title="currentPlayingVoice === v && isPlaying ? 'Pause' : 'Play Preview'"
-                            >
-                                <Loader v-if="loadingPreview === v" :size="14" class="spin" />
-                                <Pause v-else-if="currentPlayingVoice === v && isPlaying" :size="14" />
-                                <Play v-else :size="14" />
-                            </button>
-                            
-                            <!-- Delete Button -->
-                            <button 
-                                class="action-icon-btn delete-btn" 
-                                @click.stop="handleDelete(v)"
-                                title="Delete"
-                            >
-                                <Trash2 :size="14" />
-                            </button>
-                            
-                            <!-- More Options -->
-                            <div class="more-menu-wrapper">
-                                <button 
-                                    class="action-icon-btn more-btn" 
-                                    @click="toggleContextMenu(v, $event)"
-                                    title="More options"
-                                    :class="{ 'active': showContextMenu === v }"
-                                >
-                                    <MoreVertical :size="14" />
-                                </button>
-                            </div>
-                        </div>
-                    </li>
-                 </ul>
-                 
-                 <!-- Global Context Menu -->
-                 <Teleport to="body">
-                    <div 
-                        v-if="showContextMenu" 
-                        class="context-menu fixed-menu"
-                        :style="{ top: `${contextMenuPos.y}px`, left: `${contextMenuPos.x}px` }"
-                        @click.stop
-                    >
-                        <button class="context-item" @click="handleRename(showContextMenu)">
-                            <Edit2 :size="12" /> Rename
-                        </button>
-                        <button class="context-item" @click="handleExport(showContextMenu)">
-                            <Download :size="12" /> Export
-                        </button>
-                        <button class="context-item" @click="handleDetails(showContextMenu)">
-                            <Info :size="12" /> Details
-                        </button>
-                        <div class="menu-divider"></div>
-                        <button class="context-item danger" @click="handleDelete(showContextMenu)">
-                            <Trash2 :size="12" /> Delete
-                        </button>
-                    </div>
-                 </Teleport>
+            <div v-else class="space-y-2 py-4">
+              <div 
+                v-for="v in voices" 
+                :key="v" 
+                class="group relative flex items-center gap-4 p-3 rounded-lg border border-transparent hover:border-muted hover:bg-muted/50 transition-all cursor-default"
+                :class="{ 'border-primary/20 bg-primary/5': currentPlayingVoice === v }"
+              >
+                <!-- Progress Indicator -->
+                <div 
+                  v-if="currentPlayingVoice === v" 
+                  class="absolute inset-0 bg-primary/10 rounded-lg pointer-events-none transition-all duration-100" 
+                  :style="{ width: audioProgress + '%' }"
+                ></div>
 
-                 <!-- Details Modal -->
-                 <Teleport to="body">
-                     <div v-if="showDetailsModal" class="modal-overlay" @click="showDetailsModal = false">
-                         <div class="modal-content glass-panel" @click.stop>
-                             <div class="modal-header">
-                                 <h3>Voice Details</h3>
-                                 <button class="icon-btn" @click="showDetailsModal = false"><X :size="16"/></button>
-                             </div>
-                             <div class="modal-body">
-                                 <div v-if="loadingDetails" class="loading-state">Loading info...</div>
-                                 <div v-else-if="detailedVoice" class="details-grid">
-                                     <div class="detail-row">
-                                         <span class="detail-label">Name</span>
-                                         <span class="detail-value">{{ detailedVoice.name }}</span>
-                                     </div>
-                                     <div class="detail-row">
-                                         <span class="detail-label">File Size</span>
-                                         <span class="detail-value">{{ (detailedVoice.size_bytes / 1024 / 1024).toFixed(2) }} MB</span>
-                                     </div>
-                                     <div class="detail-row">
-                                         <span class="detail-label">Created</span>
-                                         <span class="detail-value">{{ new Date(detailedVoice.created_at * 1000).toLocaleString() }}</span>
-                                     </div>
-                                     <div class="detail-row">
-                                         <span class="detail-label">Modified</span>
-                                         <span class="detail-value">{{ new Date(detailedVoice.modified_at * 1000).toLocaleString() }}</span>
-                                     </div>
-                                 </div>
-                             </div>
-                         </div>
-                     </div>
-                 </Teleport>
+                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted font-bold text-muted-foreground z-10">
+                  {{ v.charAt(0).toUpperCase() }}
+                </div>
+                
+                <div class="flex-1 min-width-0 z-10">
+                  <div class="flex items-center gap-2">
+                    <p class="text-sm font-semibold truncate">{{ v }}</p>
+                    <Badge variant="secondary" class="text-[10px] px-1.5 py-0 h-4">Custom</Badge>
+                  </div>
+                  <p class="text-xs text-muted-foreground mt-0.5">Ready to use</p>
+                </div>
+
+                <div class="flex items-center gap-1 z-10">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    class="h-8 w-8 rounded-full"
+                    @click.stop="playPreview(v)"
+                    :disabled="loadingPreview === v"
+                  >
+                    <Loader2 v-if="loadingPreview === v" class="h-4 w-4 animate-spin" />
+                    <Pause v-else-if="currentPlayingVoice === v && isPlaying" class="h-4 w-4 fill-current" />
+                    <Play v-else class="h-4 w-4 fill-current" />
+                  </Button>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger as-child>
+                      <Button variant="ghost" size="icon" class="h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                        <MoreVertical class="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuLabel>Options</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem @click="handleRename(v)">
+                        <Edit2 class="mr-2 h-3.5 w-3.5" />
+                        Rename
+                      </DropdownMenuItem>
+                      <DropdownMenuItem @click="handleExport(v)">
+                        <Download class="mr-2 h-3.5 w-3.5" />
+                        Export
+                      </DropdownMenuItem>
+                      <DropdownMenuItem @click="handleDetails(v)">
+                        <Info class="mr-2 h-3.5 w-3.5" />
+                        Details
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem class="text-destructive focus:bg-destructive/10 focus:text-destructive" @click="handleDelete(v)">
+                        <Trash2 class="mr-2 h-3.5 w-3.5" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
             </div>
-        </div>
+          </ScrollArea>
+        </CardContent>
+      </Card>
     </div>
+
+    <!-- Details Modal -->
+    <Dialog :open="showDetailsModal" @update:open="showDetailsModal = $event">
+      <DialogContent class="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Voice Details</DialogTitle>
+          <DialogDescription>
+            Metadata and technical details for this voice model.
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div v-if="loadingDetails" class="flex items-center justify-center p-8">
+          <Loader2 class="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+        
+        <div v-else-if="detailedVoice" class="space-y-4 py-4">
+          <div class="grid grid-cols-3 items-center gap-4">
+            <Label class="text-right text-muted-foreground uppercase text-[10px] tracking-wider">Name</Label>
+            <div class="col-span-2 text-sm font-medium">{{ detailedVoice.name }}</div>
+          </div>
+          <Separator />
+          <div class="grid grid-cols-3 items-center gap-4">
+            <Label class="text-right text-muted-foreground uppercase text-[10px] tracking-wider">File Size</Label>
+            <div class="col-span-2 text-sm font-medium">{{ (detailedVoice.size_bytes / 1024 / 1024).toFixed(2) }} MB</div>
+          </div>
+          <Separator />
+          <div class="grid grid-cols-3 items-center gap-4">
+            <Label class="text-right text-muted-foreground uppercase text-[10px] tracking-wider">Created</Label>
+            <div class="col-span-2 text-sm font-medium">{{ new Date(detailedVoice.created_at * 1000).toLocaleString() }}</div>
+          </div>
+          <Separator />
+          <div class="grid grid-cols-3 items-center gap-4">
+            <Label class="text-right text-muted-foreground uppercase text-[10px] tracking-wider">Modified</Label>
+            <div class="col-span-2 text-sm font-medium">{{ new Date(detailedVoice.modified_at * 1000).toLocaleString() }}</div>
+          </div>
+        </div>
+        
+        <div class="flex justify-end">
+          <Button variant="outline" @click="showDetailsModal = false">Close</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  </div>
 </template>
 
 <style scoped>
-.clone-studio-layout {
-    display: flex;
-    height: 100%;
-    gap: 4px; /* Tiny gap for studio feel */
-    background: #000;
+/* Custom overrides if needed, but mostly handled by Tailwind */
+.truncate {
+  max-width: 100%;
 }
-
-.glass-panel {
-    background: #0a0a0a;
-    border-right: 1px solid var(--col-border);
-}
-.glass-panel:last-child {
-    border-right: none;
-}
-
-.work-panel {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-}
-
-.library-panel {
-    width: 300px;
-    display: flex;
-    flex-direction: column;
-    flex-shrink: 0;
-    border-left: 1px solid var(--col-border);
-}
-
-.panel-header {
-    height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 1.5rem;
-    border-bottom: 1px solid var(--col-border);
-    flex-shrink: 0;
-}
-.panel-header h3 {
-    margin: 0;
-    font-size: 0.9rem;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: var(--col-text-muted);
-}
-
-.panel-content {
-    flex: 1;
-    overflow-y: auto;
-    padding: 1.5rem;
-}
-.scrollable::-webkit-scrollbar { width: 6px; }
-.scrollable::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
-
-/* Form Styling */
-.clone-form {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    max-width: 800px;
-    margin: 0 auto;
-    gap: 2rem;
-}
-
-.form-section {
-    display: flex;
-    flex-direction: column;
-    gap: 0.8rem;
-}
-
-.form-section.flex-grow {
-    flex: 1;
-}
-
-.section-label {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--col-text-muted);
-    text-transform: uppercase;
-}
-
-/* Audio Uploader - Specialized Look */
-.audio-uploader {
-    border: 1px dashed var(--col-border);
-    background: rgba(255,255,255,0.02);
-    border-radius: var(--radius-sm);
-    height: 120px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s;
-    position: relative;
-    overflow: hidden;
-}
-.audio-uploader:hover {
-    background: rgba(255,255,255,0.04);
-    border-color: var(--col-text-muted);
-}
-.audio-uploader.has-file {
-    border-style: solid;
-    border-color: var(--col-primary);
-    background: rgba(var(--hue-primary), 0.05);
-}
-
-.upload-placeholder {
-    display: flex; align-items: center; gap: 1rem;
-}
-.icon-circle {
-    width: 40px; height: 40px; border-radius: 50%; background: #222;
-    display: flex; align-items: center; justify-content: center; color: #666;
-}
-.text-group { display: flex; flex-direction: column; }
-.main-text { font-size: 0.95rem; font-weight: 500; color: #ccc; }
-.sub-text { font-size: 0.8rem; color: #666; }
-
-.file-ready {
-    display: flex; align-items: center; gap: 1rem; width: 100%; padding: 0 2rem;
-}
-.file-icon {
-    width: 40px; height: 40px; background: var(--col-primary); color: white;
-    border-radius: 50%; display: flex; align-items: center; justify-content: center;
-}
-.file-details { flex: 1; display: flex; flex-direction: column; }
-.filename { font-weight: 600; color: white; }
-.filesize { font-size: 0.8rem; color: var(--col-primary); opacity: 0.8; }
-.change-btn { font-size: 0.8rem; text-decoration: underline; color: #666; }
-
-/* Stealth Inputs */
-.stealth-textarea {
-    flex: 1;
-    background: #111;
-    border: 1px solid var(--col-border);
-    border-radius: var(--radius-sm);
-    padding: 1rem;
-    color: var(--col-text-main);
-    font-family: monospace;
-    font-size: 0.95rem;
-    line-height: 1.6;
-    resize: none;
-    min-height: 200px;
-}
-.stealth-textarea:focus {
-    outline: none;
-    border-color: var(--col-primary);
-}
-.hint { font-size: 0.8rem; color: #555; margin-top: 0.5rem; text-align: right; }
-
-
-/* Voice List */
-.voice-list {
-    list-style: none; padding: 0; margin: 0;
-    display: flex; flex-direction: column; gap: 4px;
-}
-.voice-item {
-    display: flex; align-items: center; gap: 10px;
-    padding: 8px 10px;
-    background: #111;
-    border: 1px solid transparent;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: all 0.15s ease;
-    position: relative;
-    overflow: hidden;
-}
-.voice-item:hover {
-    border-color: var(--col-border);
-    background: #161616;
-}
-.voice-item:hover .voice-actions {
-    opacity: 1;
-}
-.voice-item.is-playing {
-    border-color: var(--col-primary);
-    background: rgba(var(--hue-primary), 0.08);
-}
-
-/* Progress Bar */
-.progress-bar {
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    background: rgba(var(--hue-primary), 0.15);
-    pointer-events: none;
-    transition: width 0.1s linear;
-}
-
-.voice-avatar {
-    width: 28px; height: 28px; background: #222; color: #777;
-    border-radius: 4px; display: flex; align-items: center; justify-content: center;
-    font-weight: 600; font-size: 0.75rem;
-    flex-shrink: 0;
-    z-index: 1;
-}
-.voice-info { 
-    display: flex; flex-direction: column; flex: 1; min-width: 0; 
-    gap: 1px;
-    z-index: 1;
-}
-.voice-name { 
-    color: #ddd; font-size: 0.85rem; font-weight: 500; 
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    letter-spacing: 0.01em;
-}
-.voice-type { 
-    color: #555; font-size: 0.7rem; 
-    letter-spacing: 0.02em;
-}
-
-/* Voice Actions */
-.voice-actions {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    opacity: 0;
-    transition: opacity 0.15s ease;
-    z-index: 1;
-}
-.voice-item:hover .voice-actions,
-.voice-item.is-playing .voice-actions {
-    opacity: 1;
-}
-
-.action-icon-btn {
-    width: 26px; height: 26px;
-    display: flex; align-items: center; justify-content: center;
-    background: transparent;
-    border: none;
-    border-radius: 4px;
-    color: #666;
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-.action-icon-btn:hover {
-    background: #222;
-    color: #aaa;
-}
-.action-icon-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.play-btn:hover {
-    color: var(--col-primary);
-}
-.delete-btn:hover {
-    color: #ff4d4d;
-}
-
-/* Context Menu */
-.more-menu-wrapper {
-    position: relative;
-}
-.context-menu {
-    position: absolute;
-    right: 0;
-    bottom: 100%;
-    margin-bottom: 4px;
-    background: #1f1f1f;
-    border: 1px solid #333;
-    border-radius: var(--radius-sm);
-    min-width: 150px;
-    padding: 4px;
-    z-index: 1000;
-    box-shadow: 0 -4px 16px rgba(0,0,0,0.5);
-}
-.context-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    padding: 8px 10px;
-    background: none;
-    border: none;
-    color: #ccc;
-    font-size: 0.8rem;
-    cursor: pointer;
-    border-radius: 4px;
-    transition: background 0.15s;
-}
-.context-item:hover {
-    background: #2a2a2a;
-    color: #ff4d4d;
-}
-
-.empty-state { text-align: center; padding: 2rem; color: #444; font-size: 0.9rem; }
-.loading-state { text-align: center; padding: 2rem; color: #555; font-size: 0.85rem; }
-.icon-btn { background: none; border: none; color: inherit; cursor: pointer; padding: 4px; }
-.icon-btn:hover { color: var(--col-primary); }
-.spin { animation: spin 1s linear infinite; }
-@keyframes spin { 100% { transform: rotate(360deg); } }
-
-
-
-/* Updated Context Menu for Fixed Positioning */
-.fixed-menu {
-    position: fixed;
-    left: 0;
-    top: 0;
-    
-    /* Override absolute positioning context */
-    right: auto;
-    bottom: auto;
-    
-    transform: translateX(-100%); /* Align right edge to position */
-    margin-top: 4px;
-    z-index: 9999;
-    
-    /* Ensure opacity and styling */
-    background-color: #1a1a1a; 
-    border: 1px solid #333;
-    border-radius: 4px;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
-    padding: 4px;
-    min-width: 140px;
-}
-
-.menu-divider {
-    height: 1px;
-    background: #333;
-    margin: 4px 0;
-}
-
-.context-item.danger {
-    color: #ff4d4d;
-}
-.context-item.danger:hover {
-    background: rgba(255, 77, 77, 0.1);
-}
-
-.more-btn.active {
-    color: var(--col-primary);
-    background: rgba(255,255,255,0.05);
-}
-
-/* Modal Styles */
-.modal-overlay {
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.7);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 10000;
-}
-.modal-content {
-    width: 400px;
-    max-width: 90vw;
-    background: #111;
-    border: 1px solid #333;
-    border-radius: var(--radius-md);
-    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-    display: flex;
-    flex-direction: column;
-}
-.modal-header {
-    padding: 1rem 1.5rem;
-    border-bottom: 1px solid #222;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-.modal-header h3 { margin: 0; font-size: 1rem; color: #eee; }
-.modal-body { padding: 1.5rem; }
-
-.details-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-}
-.detail-row {
-    display: flex;
-    justify-content: space-between;
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid #1a1a1a;
-}
-.detail-row:last-child { border-bottom: none; }
-.detail-label { color: #666; font-size: 0.9rem; }
-.detail-value { color: #ccc; font-family: monospace; font-size: 0.9rem; }
 </style>

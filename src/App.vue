@@ -1,118 +1,68 @@
 <script setup lang="ts">
 import { RouterLink, RouterView } from 'vue-router';
 import { Mic, Edit3, Settings } from 'lucide-vue-next';
+import ThemeToggle from '@/components/ThemeToggle.vue';
 </script>
 
 <template>
-  <div class="app-layout">
-    <header class="header glass-panel">
-      <div class="logo">
-        <h2>Qwen3 Studio</h2>
-      </div>
-      <nav class="nav-menu">
-        <RouterLink to="/voice-clone" class="nav-item" active-class="active">
-          <Mic :size="18" />
-          <span>Clone</span>
-        </RouterLink>
-        <RouterLink to="/editor" class="nav-item" active-class="active">
-          <Edit3 :size="18" />
-          <span>Editor</span>
-        </RouterLink>
-      </nav>
-      <div class="right-actions">
-        <div class="nav-icon">
-          <Settings :size="18" />
+  <div class="min-h-screen bg-background text-foreground font-sans antialiased">
+    <header class="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div class="container flex h-14 items-center gap-4 px-4 md:px-8">
+        <div class="mr-4 flex">
+          <RouterLink to="/" class="mr-6 flex items-center space-x-2">
+            <span class="font-bold inline-block text-xl tracking-tight">Qwen3 Studio</span>
+          </RouterLink>
+          <nav class="flex items-center space-x-6 text-sm font-medium">
+            <RouterLink 
+              to="/voice-clone" 
+              class="transition-colors hover:text-foreground/80 flex items-center gap-2"
+              active-class="text-foreground font-semibold"
+              class-inactive="text-foreground/60"
+            >
+              <Mic class="h-4 w-4" />
+              <span>Clone</span>
+            </RouterLink>
+            <RouterLink 
+              to="/editor" 
+              class="transition-colors hover:text-foreground/80 flex items-center gap-2"
+              active-class="text-foreground font-semibold"
+              class-inactive="text-foreground/60"
+            >
+              <Edit3 class="h-4 w-4" />
+              <span>Editor</span>
+            </RouterLink>
+          </nav>
+        </div>
+        <div class="flex flex-1 items-center justify-between space-x-2 md:justify-end">
+          <div class="w-full flex-1 md:w-auto md:flex-none">
+          </div>
+          <nav class="flex items-center gap-2">
+            <div class="nav-icon p-2 hover:bg-accent rounded-md transition-colors cursor-pointer">
+              <Settings class="h-4 w-4 text-muted-foreground" />
+            </div>
+            <ThemeToggle />
+          </nav>
         </div>
       </div>
     </header>
-    <main class="main-content">
+    <main class="flex-1">
       <RouterView />
     </main>
   </div>
 </template>
 
-<style scoped>
-.app-layout {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  gap: 0;
-  overflow: hidden;
-  background: black;
-}
-
-.header {
-  height: 48px;
-  width: 100%;
-  display: flex;
-  align-items: center;
-  padding: 0 1.5rem;
-  border-bottom: 1px solid var(--col-border);
-  flex-shrink: 0;
-  z-index: 100;
-  justify-content: flex-start; /* Logo left */
-  background: #050505;
-}
-
-.logo {
-  margin-right: 3rem;
-  display: flex; align-items: center;
-}
-.logo h2 {
-  background: white;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  font-size: 1rem;
+<style>
+/* Global reset or tweaks if needed, but Tailwind should handle most */
+html, body {
+  height: 100%;
   margin: 0;
-  font-weight: 700;
-  letter-spacing: -0.5px;
 }
 
-/* Nav is now left-aligned after logo, specific request from screenshot visual */
-.nav-menu {
-  display: flex;
-  gap: 2rem;
+#app {
   height: 100%;
 }
 
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  height: 100%;
-  color: #666;
-  font-size: 0.9rem;
-  text-decoration: none;
-  transition: all 0.2s;
-  border-bottom: 2px solid transparent; /* Bottom indicator */
-  font-weight: 500;
-}
-
-.nav-item:hover {
-  color: #aaa;
-}
-
-.nav-item.active {
-  color: white;
-  /* No background, just text color as per screenshot usually implies minimal */
-}
-
-/* Right side actions */
-.right-actions {
-    margin-left: auto;
-    display: flex;
-    align-items: center;
-}
-
-.nav-icon {
-  color: var(--col-text-muted);
-  cursor: pointer;
-}
-.nav-icon:hover { color: white; }
-
-.main-content {
-  flex: 1;
-  overflow: hidden;
-  position: relative;
+.text-foreground\/60 {
+  color: hsl(var(--foreground) / 0.6);
 }
 </style>
