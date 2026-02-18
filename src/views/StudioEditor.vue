@@ -236,13 +236,13 @@ const handleDurationDrag = (e: MouseEvent) => {
           <!-- Script Panel -->
           <ResizablePanel :default-size="40" :min-size="30">
             <div class="h-full flex flex-col border-r">
-              <div class="flex items-center justify-between px-4 py-2 border-b bg-muted/40">
+              <div class="flex items-center justify-between px-4 h-12 border-b bg-muted/40 shrink-0">
                 <div class="flex items-center gap-2">
                   <Terminal class="h-4 w-4 text-muted-foreground" />
                   <h3 class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Script Editor</h3>
                 </div>
-                <Button variant="ghost" size="xs" @click.stop="store.addBlock()" class="h-7 px-2 text-xs">
-                  <Plus class="h-3 w-3 mr-1" /> Add Block
+                <Button variant="ghost" size="xs" @click.stop="store.addBlock()" class="h-8 px-2 text-xs">
+                  <Plus class="h-3.5 w-3.5 mr-1" /> Add Block
                 </Button>
               </div>
               
@@ -271,7 +271,7 @@ const handleDurationDrag = (e: MouseEvent) => {
                 </div>
               </ScrollArea>
 
-              <div class="p-4 border-t bg-muted/20">
+              <div class="h-16 px-4 border-t bg-muted/20 flex items-center shrink-0">
                 <Button class="w-full shadow-md" @click.stop="store.generateBatch">
                   <Layers class="h-4 w-4 mr-2" />
                   {{ store.selectedBlocks.length > 0 ? `Generate Selected (${store.selectedBlocks.length})` : 'Generate All Tracks' }}
@@ -285,7 +285,7 @@ const handleDurationDrag = (e: MouseEvent) => {
           <!-- Monitor Panel -->
           <ResizablePanel :default-size="60">
             <div class="h-full flex flex-col">
-              <div class="flex items-center justify-between px-4 py-2 border-b bg-muted/40">
+              <div class="flex items-center justify-between px-4 h-12 border-b bg-muted/40 shrink-0">
                 <div class="flex items-center gap-2">
                   <MonitorIcon class="h-4 w-4 text-muted-foreground" />
                   <h3 class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Monitor</h3>
@@ -302,7 +302,7 @@ const handleDurationDrag = (e: MouseEvent) => {
                         <Button 
                           variant="outline" 
                           size="icon" 
-                          class="h-7 w-7"
+                          class="h-8 w-8"
                           @click="handleExport" 
                           :disabled="isExporting || store.blocks.length === 0"
                         >
@@ -339,7 +339,7 @@ const handleDurationDrag = (e: MouseEvent) => {
                 </div>
               </div>
 
-              <div class="h-16 border-t flex items-center justify-center gap-8 bg-muted/20">
+              <div class="h-16 border-t flex items-center justify-center gap-8 bg-muted/20 shrink-0">
                 <Button variant="ghost" size="icon" @click="seek(0)" class="h-10 w-10 text-muted-foreground hover:text-foreground">
                   <Rewind class="h-5 w-5 fill-current" />
                 </Button>
