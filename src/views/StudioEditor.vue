@@ -10,7 +10,9 @@ import {
     Loader2,
     Monitor as MonitorIcon,
     Terminal,
-    Clock
+    Clock,
+    ChevronLeft,
+    ChevronRight
 } from 'lucide-vue-next';
 import { exportAudioProject } from '../utils/audioExport';
 import { Button } from '@/components/ui/button';
@@ -32,6 +34,7 @@ const store = useStudioStore();
 const voices = ref<string[]>([]);
 const loadingVoices = ref(false);
 const isExporting = ref(false);
+const isSidebarCollapsed = ref(false);
 
 const handleExport = async () => {
     isExporting.value = true;
@@ -234,7 +237,25 @@ const handleDurationDrag = (e: MouseEvent) => {
       <ResizablePanel :default-size="70" :min-size="40">
         <ResizablePanelGroup direction="horizontal">
           <!-- Script Panel -->
-          <ResizablePanel :default-size="45" :min-size="30">
+          <ResizablePanel 
+            :default-size="45" 
+            :min-size="0" 
+            :collapsible="true"
+            @collapse="isSidebarCollapsed = true"
+            @expand="isSidebarCollapsed = false"
+            class="relative group/lnb"
+          >
+            <!-- Toggle Button (Inside Panel when open) -->
+            <Button 
+                v-if="!isSidebarCollapsed"
+                variant="ghost" 
+                size="icon" 
+                class="absolute -right-3 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full z-50 bg-background shadow-md border border-border hover:bg-accent hover:text-primary transition-all opacity-0 group-hover/lnb:opacity-100"
+                @click="isSidebarCollapsed = true"
+            >
+                <ChevronLeft class="h-4 w-4" />
+            </Button>
+
             <div class="h-full flex flex-col border-r bg-muted/20">
               <div class="flex items-center justify-between px-6 h-14 border-b bg-background/50 backdrop-blur-sm shrink-0">
                 <div class="flex items-center gap-3">
@@ -283,11 +304,22 @@ const handleDurationDrag = (e: MouseEvent) => {
               </div>
             </div>
           </ResizablePanel>
-
-          <ResizableHandle with-handle class="w-1 bg-border/50 hover:bg-primary/50 transition-colors" />
+          
+          <ResizableHandle with-handle class="w-1 bg-border/50 hover:bg-primary/50 transition-colors">
+            <!-- Toggle Button (When closed) -->
+            <Button 
+                v-if="isSidebarCollapsed"
+                variant="outline" 
+                size="icon" 
+                class="absolute -left-4 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full z-50 bg-background shadow-md border hover:bg-accent hover:text-primary transition-all"
+                @click="isSidebarCollapsed = false"
+            >
+                <ChevronRight class="h-4 w-4" />
+            </Button>
+          </ResizableHandle>
 
           <!-- Monitor Panel -->
-          <ResizablePanel :default-size="55">
+          <ResizablePanel :default-size="isSidebarCollapsed ? 100 : 55">
             <div class="h-full flex flex-col bg-zinc-950">
               <div class="flex items-center justify-between px-6 h-14 border-b border-white/5 bg-white/5 shrink-0">
                 <div class="flex items-center gap-3">

@@ -21,5 +21,6 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
         <GripVertical class="h-2.5 w-2.5" />
       </div>
     </template>
+    <slot />
   </SplitterResizeHandle>
 </template>

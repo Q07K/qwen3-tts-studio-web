@@ -4,7 +4,7 @@ import { saveVoice, getVoices, getVoicePreview, deleteVoice, renameVoice, export
 import { 
   Upload, Mic, RefreshCw, Play, Pause, Trash2, 
   MoreVertical, Loader2, Edit2, Download, Info,
-  FileAudio, Square
+  FileAudio, Square, ChevronLeft, ChevronRight
 } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,6 +43,7 @@ const loading = ref(false);
 const loadingList = ref(false);
 const errorMsg = ref('');
 const voices = ref<string[]>([]);
+const isSidebarCollapsed = ref(false);
 
 // Audio Player State
 const currentPlayingVoice = ref<string | null>(null);
@@ -288,9 +289,26 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="h-[calc(100vh-4rem)] flex overflow-hidden bg-background">
+  <div class="h-[calc(100vh-4rem)] flex overflow-hidden bg-background relative">
     <!-- Sidebar: Voice Library -->
-    <aside class="w-80 md:w-96 border-r flex flex-col shrink-0 bg-muted/30">
+    <aside 
+      class="border-r flex flex-col shrink-0 bg-muted/30 transition-all duration-300 relative group/lnb"
+      :class="isSidebarCollapsed ? 'w-0' : 'w-80 md:w-96'"
+    >
+      <!-- Toggle Button (Floating) -->
+      <Button 
+        variant="outline" 
+        size="icon" 
+        class="absolute -right-4 top-8 h-8 w-8 rounded-full z-10 bg-background shadow-md border-border hover:bg-accent hover:text-primary transition-all opacity-0 group-hover/lnb:opacity-100"
+        :class="{ 'opacity-100 -right-10': isSidebarCollapsed }"
+        @click="isSidebarCollapsed = !isSidebarCollapsed"
+      >
+        <ChevronLeft v-if="!isSidebarCollapsed" class="h-4 w-4" />
+        <ChevronRight v-else class="h-4 w-4" />
+      </Button>
+
+      <div v-show="!isSidebarCollapsed" class="flex flex-col h-full w-80 md:w-96 overflow-hidden">
+
       <div class="p-6 border-b flex items-center justify-between bg-background/50 backdrop-blur-sm">
         <div class="space-y-1">
           <h2 class="text-xl font-display font-bold tracking-tight">Voice Library</h2>
@@ -392,6 +410,7 @@ onUnmounted(() => {
           </div>
         </div>
       </ScrollArea>
+      </div>
     </aside>
 
     <!-- Main Content: Voice Cloning Form -->
