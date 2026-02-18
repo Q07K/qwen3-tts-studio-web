@@ -229,126 +229,134 @@ const handleDurationDrag = (e: MouseEvent) => {
 </script>
 
 <template>
-  <div class="h-[calc(100vh-3.5rem)] flex flex-col bg-background overflow-hidden">
+  <div class="h-[calc(100vh-4rem)] flex flex-col bg-background overflow-hidden">
     <ResizablePanelGroup direction="vertical" class="flex-1">
       <ResizablePanel :default-size="70" :min-size="40">
         <ResizablePanelGroup direction="horizontal">
           <!-- Script Panel -->
-          <ResizablePanel :default-size="40" :min-size="30">
-            <div class="h-full flex flex-col border-r">
-              <div class="flex items-center justify-between px-4 h-12 border-b bg-muted/40 shrink-0">
-                <div class="flex items-center gap-2">
-                  <Terminal class="h-4 w-4 text-muted-foreground" />
-                  <h3 class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Script Editor</h3>
+          <ResizablePanel :default-size="45" :min-size="30">
+            <div class="h-full flex flex-col border-r bg-muted/20">
+              <div class="flex items-center justify-between px-6 h-14 border-b bg-background/50 backdrop-blur-sm shrink-0">
+                <div class="flex items-center gap-3">
+                  <div class="p-1.5 bg-primary/10 rounded-lg">
+                    <Terminal class="h-4 w-4 text-primary" />
+                  </div>
+                  <h3 class="text-xs font-black uppercase tracking-[0.2em] text-foreground/70">Script Editor</h3>
                 </div>
-                <Button variant="ghost" size="xs" @click.stop="store.addBlock()" class="h-8 px-2 text-xs">
-                  <Plus class="h-3.5 w-3.5 mr-1" /> Add Block
+                <Button variant="outline" size="sm" @click.stop="store.addBlock()" class="h-9 px-3 text-xs font-bold rounded-lg border-primary/20 hover:bg-primary/5 hover:text-primary transition-all">
+                  <Plus class="h-3.5 w-3.5 mr-2" /> Add Script Block
                 </Button>
               </div>
               
-              <ScrollArea class="flex-1" @click="store.toggleSelection('', false)">
-                <div class="p-6 space-y-4">
+              <ScrollArea class="flex-1 bg-background/30" @click="store.toggleSelection('', false)">
+                <div class="p-6 md:p-8 space-y-6">
                   <div v-for="(block, index) in store.blocks" :key="block.id" class="relative group">
                     <ScriptBlock :blockId="block.id" :voices="voices" />
                     <!-- Insert divider -->
                     <div 
-                      class="absolute -bottom-2 left-0 right-0 h-4 z-10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                      class="absolute -bottom-3 left-0 right-0 h-6 z-10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
                       @click.stop="store.addBlock(index + 1)"
                     >
-                      <div class="w-full h-[1px] bg-primary/40"></div>
-                      <div class="absolute bg-primary text-primary-foreground rounded-full p-0.5">
+                      <div class="w-full h-0.5 bg-gradient-to-r from-transparent via-primary/30 to-transparent"></div>
+                      <div class="absolute bg-primary text-primary-foreground rounded-full p-1 shadow-lg shadow-primary/20 scale-90 group-hover:scale-100 transition-transform">
                         <Plus class="h-3 w-3" />
                       </div>
                     </div>
                   </div>
                   <div 
-                    class="border-2 border-dashed border-muted rounded-lg p-8 flex flex-col items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors cursor-pointer"
+                    class="border-2 border-dashed border-muted rounded-2xl p-12 flex flex-col items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-all cursor-pointer group shadow-inner"
                     @click.stop="store.addBlock()"
                   >
-                    <Plus class="h-6 w-6 mb-2" />
-                    <span class="text-sm font-medium">New Script Block</span>
+                    <div class="p-4 bg-muted/50 rounded-2xl group-hover:scale-110 transition-transform mb-4">
+                      <Plus class="h-8 w-8" />
+                    </div>
+                    <span class="text-sm font-bold uppercase tracking-widest">New Script Track</span>
                   </div>
                 </div>
               </ScrollArea>
 
-              <div class="h-16 px-4 border-t bg-muted/20 flex items-center shrink-0">
-                <Button class="w-full shadow-md" @click.stop="store.generateBatch">
-                  <Layers class="h-4 w-4 mr-2" />
-                  {{ store.selectedBlocks.length > 0 ? `Generate Selected (${store.selectedBlocks.length})` : 'Generate All Tracks' }}
+              <div class="h-20 px-6 border-t bg-background/50 backdrop-blur-md flex items-center shrink-0">
+                <Button class="w-full h-12 shadow-xl shadow-primary/20 rounded-xl font-bold text-base transition-all hover:scale-[1.01] active:scale-[0.99]" @click.stop="store.generateBatch">
+                  <Layers class="h-5 w-5 mr-3" />
+                  {{ store.selectedBlocks.length > 0 ? `Generate Selected Tracks (${store.selectedBlocks.length})` : 'Generate Full Audio Project' }}
                 </Button>
               </div>
             </div>
           </ResizablePanel>
 
-          <ResizableHandle with-handle />
+          <ResizableHandle with-handle class="w-1 bg-border/50 hover:bg-primary/50 transition-colors" />
 
           <!-- Monitor Panel -->
-          <ResizablePanel :default-size="60">
-            <div class="h-full flex flex-col">
-              <div class="flex items-center justify-between px-4 h-12 border-b bg-muted/40 shrink-0">
-                <div class="flex items-center gap-2">
-                  <MonitorIcon class="h-4 w-4 text-muted-foreground" />
-                  <h3 class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Monitor</h3>
-                </div>
+          <ResizablePanel :default-size="55">
+            <div class="h-full flex flex-col bg-zinc-950">
+              <div class="flex items-center justify-between px-6 h-14 border-b border-white/5 bg-white/5 shrink-0">
                 <div class="flex items-center gap-3">
-                  <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-background border text-[11px] font-mono tabular-nums">
-                    <span class="text-primary font-bold">{{ currentTime.toFixed(2) }}s</span>
-                    <span class="text-muted-foreground">/</span>
-                    <span class="text-muted-foreground">{{ store.projectDuration.toFixed(2) }}s</span>
+                  <div class="p-1.5 bg-white/10 rounded-lg text-white/50">
+                    <MonitorIcon class="h-4 w-4" />
+                  </div>
+                  <h3 class="text-xs font-black uppercase tracking-[0.2em] text-white/50">Project Monitor</h3>
+                </div>
+                <div class="flex items-center gap-4">
+                  <div class="flex items-center gap-2 px-3 py-1 rounded-lg bg-black border border-white/10 text-[12px] font-mono tabular-nums shadow-inner">
+                    <span class="text-primary font-black">{{ currentTime.toFixed(2) }}s</span>
+                    <span class="text-white/20">/</span>
+                    <span class="text-white/40">{{ store.projectDuration.toFixed(2) }}s</span>
                   </div>
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger as-child>
                         <Button 
-                          variant="outline" 
+                          variant="ghost" 
                           size="icon" 
-                          class="h-8 w-8"
+                          class="h-9 w-9 text-white/50 hover:text-white hover:bg-white/10 rounded-lg border border-white/5"
                           @click="handleExport" 
                           :disabled="isExporting || store.blocks.length === 0"
                         >
-                          <Loader2 v-if="isExporting" class="h-3.5 w-3.5 animate-spin" />
-                          <Download v-else class="h-3.5 w-3.5" />
+                          <Loader2 v-if="isExporting" class="h-4 w-4 animate-spin" />
+                          <Download v-else class="h-4 w-4" />
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>Export Project</TooltipContent>
+                      <TooltipContent class="bg-zinc-900 text-white border-zinc-800">Export High-Res Master</TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                 </div>
               </div>
 
-              <div class="flex-1 bg-black relative flex items-center justify-center overflow-hidden">
-                <div class="absolute inset-0 opacity-20 pointer-events-none" style="background-image: radial-gradient(circle at center, #222 1px, transparent 1px); background-size: 20px 20px;"></div>
+              <div class="flex-1 relative flex items-center justify-center overflow-hidden">
+                <div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: radial-gradient(circle at center, #fff 1px, transparent 1px); background-size: 32px 32px;"></div>
                 
-                <div class="z-10 text-center space-y-4">
-                  <div v-if="isPlaying" class="flex items-center justify-center gap-1 h-12">
-                     <div v-for="i in 12" :key="i" class="w-1 bg-primary rounded-full animate-pulse" :style="{ height: `${10 + Math.random() * 30}px`, animationDelay: `${i * 0.1}s` }"></div>
+                <div class="z-10 text-center space-y-6">
+                  <div v-if="isPlaying" class="flex items-end justify-center gap-1.5 h-16">
+                     <div v-for="i in 16" :key="i" class="w-1.5 bg-primary/80 rounded-full animate-waveform shadow-[0_0_15px_rgba(var(--primary),0.5)]" :style="{ height: `${20 + Math.random() * 60}px`, animationDelay: `${i * 0.05}s` }"></div>
                   </div>
-                  <h2 class="text-3xl font-bold tracking-tighter text-white/90">
-                    {{ isPlaying ? 'PLAYING' : 'READY' }}
-                  </h2>
-                  <p class="text-sm text-muted-foreground font-mono">{{ currentTime.toFixed(3) }}</p>
+                  <div class="space-y-2">
+                    <h2 class="text-4xl font-black tracking-tighter text-white uppercase italic">
+                      {{ isPlaying ? 'Playing' : 'Ready' }}
+                    </h2>
+                    <p class="text-xs text-white/40 font-mono tracking-[0.5em] uppercase">{{ currentTime.toFixed(3) }}</p>
+                  </div>
                 </div>
 
-                <!-- Active block text preview -->
-                <div class="absolute bottom-8 left-1/2 -translate-x-1/2 w-full max-w-xl px-4">
-                   <div v-if="activeAudios.size > 0" class="bg-black/60 backdrop-blur-md border border-white/10 p-4 rounded-lg text-center shadow-2xl">
-                     <p class="text-white/80 text-lg leading-relaxed italic">
+                <!-- Subtitles / Active block text preview -->
+                <div class="absolute bottom-12 left-1/2 -translate-x-1/2 w-full max-w-2xl px-6 transition-all duration-300 transform" :class="activeAudios.size > 0 ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'">
+                   <div class="bg-black/40 backdrop-blur-xl border border-white/10 p-6 rounded-2xl text-center shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)]">
+                     <p class="text-white/90 text-xl font-medium leading-relaxed italic font-display">
                         "{{ store.blocks.find(b => activeAudios.has(b.id))?.text }}"
                      </p>
                    </div>
                 </div>
               </div>
 
-              <div class="h-16 border-t flex items-center justify-center gap-8 bg-muted/20 shrink-0">
-                <Button variant="ghost" size="icon" @click="seek(0)" class="h-10 w-10 text-muted-foreground hover:text-foreground">
-                  <Rewind class="h-5 w-5 fill-current" />
+              <div class="h-20 border-t border-white/5 flex items-center justify-center gap-10 bg-white/5 shrink-0">
+                <Button variant="ghost" size="icon" @click="seek(0)" class="h-12 w-12 text-white/40 hover:text-white hover:bg-white/10 rounded-xl transition-all">
+                  <Rewind class="h-6 w-6 fill-current" />
                 </Button>
-                <Button variant="default" size="icon" @click="togglePlayback" class="h-12 w-12 rounded-full shadow-lg scale-110">
-                  <Pause v-if="isPlaying" class="h-6 w-6 fill-current" />
-                  <Play v-else class="h-6 w-6 fill-current ml-1" />
+                <Button variant="default" size="icon" @click="togglePlayback" class="h-14 w-14 rounded-2xl shadow-2xl shadow-primary/40 transform transition-all hover:scale-110 active:scale-95 bg-primary text-primary-foreground">
+                  <Pause v-if="isPlaying" class="h-8 w-8 fill-current" />
+                  <Play v-else class="h-8 w-8 fill-current ml-1" />
                 </Button>
-                <Button variant="ghost" size="icon" @click="seek(timelineDuration)" class="h-10 w-10 text-muted-foreground hover:text-foreground">
-                  <SkipForward class="h-5 w-5 fill-current" />
+                <Button variant="ghost" size="icon" @click="seek(timelineDuration)" class="h-12 w-12 text-white/40 hover:text-white hover:bg-white/10 rounded-xl transition-all">
+                  <SkipForward class="h-6 w-6 fill-current" />
                 </Button>
               </div>
             </div>
@@ -356,97 +364,106 @@ const handleDurationDrag = (e: MouseEvent) => {
         </ResizablePanelGroup>
       </ResizablePanel>
 
-      <ResizableHandle with-handle />
+      <ResizableHandle with-handle class="h-1.5 bg-border/50 hover:bg-primary/50 transition-colors" />
 
       <!-- Timeline Panel -->
       <ResizablePanel :default-size="30" :min-size="15">
-        <div class="h-full flex flex-col bg-muted/10">
-          <div class="flex items-center justify-between px-4 py-1.5 border-b bg-muted/40">
-            <div class="flex items-center gap-2">
-              <Clock class="h-4 w-4 text-muted-foreground" />
-              <h3 class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Timeline</h3>
-            </div>
+        <div class="h-full flex flex-col bg-background">
+          <div class="flex items-center justify-between px-6 h-12 border-b bg-muted/30">
             <div class="flex items-center gap-3">
-              <div class="flex items-center border rounded bg-background overflow-hidden">
-                <Button variant="ghost" size="icon" class="h-6 w-6 rounded-none p-0" @click="PX_PER_SEC = Math.max(10, PX_PER_SEC - 10)">
-                  <ZoomOut class="h-3 w-3" />
+              <div class="p-1 px-2 bg-muted rounded font-mono text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-2">
+                <Clock class="h-3 w-3" />
+                Timeline
+              </div>
+            </div>
+            <div class="flex items-center gap-4">
+              <div class="flex items-center p-0.5 rounded-lg bg-muted/50 border shadow-inner overflow-hidden">
+                <Button variant="ghost" size="icon" class="h-7 w-7 rounded-md p-0 hover:bg-background shadow-xs transition-all" @click="PX_PER_SEC = Math.max(10, PX_PER_SEC - 10)">
+                  <ZoomOut class="h-3.5 w-3.5" />
                 </Button>
-                <Separator orientation="vertical" class="h-4" />
-                <span class="px-2 text-[10px] font-mono font-bold">{{ PX_PER_SEC }}px/s</span>
-                <Separator orientation="vertical" class="h-4" />
-                <Button variant="ghost" size="icon" class="h-6 w-6 rounded-none p-0" @click="PX_PER_SEC += 10">
-                  <ZoomIn class="h-3 w-3" />
+                <div class="px-3 text-[10px] font-black font-mono tracking-widest text-muted-foreground/60">{{ PX_PER_SEC }}PX/S</div>
+                <Button variant="ghost" size="icon" class="h-7 w-7 rounded-md p-0 hover:bg-background shadow-xs transition-all" @click="PX_PER_SEC += 10">
+                  <ZoomIn class="h-3.5 w-3.5" />
                 </Button>
               </div>
             </div>
           </div>
           
-          <div class="flex-1 relative overflow-auto scrollbar-hide">
+          <div class="flex-1 relative overflow-auto scrollbar-hide bg-muted/5">
             <!-- Ruler -->
-            <div class="sticky top-0 z-30 flex border-b bg-background/80 backdrop-blur">
-              <div class="w-32 shrink-0 border-r bg-muted/50"></div>
-              <div class="flex-1 relative h-8" :style="{ width: (timelineDuration * PX_PER_SEC) + 'px' }" @click="(e: any) => seek(e.offsetX / PX_PER_SEC)">
-                <div v-for="i in Math.floor(timelineDuration) + 1" :key="i" class="absolute top-0 bottom-0 border-l border-muted/50" :style="{ left: ((i-1) * PX_PER_SEC) + 'px' }">
-                  <span v-if="(i-1) % 5 === 0" class="absolute top-1 left-2 text-[10px] font-mono font-bold text-muted-foreground/60">{{ i-1 }}s</span>
+            <div class="sticky top-0 z-30 flex border-b bg-background/90 backdrop-blur-md">
+              <div class="w-40 shrink-0 border-r bg-muted/20"></div>
+              <div class="flex-1 relative h-10 select-none cursor-crosshair" :style="{ width: (timelineDuration * PX_PER_SEC) + 'px' }" @mousedown="(e: any) => seek(e.offsetX / PX_PER_SEC)">
+                <div v-for="i in Math.floor(timelineDuration) + 1" :key="i" class="absolute top-0 bottom-0 border-l border-muted/50 transition-opacity" :class="{'opacity-100': (i-1)%5===0, 'opacity-40': (i-1)%5!==0}" :style="{ left: ((i-1) * PX_PER_SEC) + 'px' }">
+                  <span v-if="(i-1) % 5 === 0" class="absolute top-2 left-2 text-[10px] font-black font-mono text-muted-foreground tracking-tighter underline decoration-primary/40 underline-offset-4">{{ i-1 }}s</span>
+                  <div v-else class="h-2 w-px bg-muted-foreground/20 mt-auto"></div>
                 </div>
                 
-                <!-- Playhead (Top Part) -->
-                <div class="absolute inset-y-0 w-0.5 bg-primary z-50 pointer-events-none" :style="{ left: (currentTime * PX_PER_SEC) + 'px' }">
-                  <div class="absolute -top-1 -left-[5px] w-3 h-3 bg-primary rounded-full shadow-lg"></div>
+                <!-- Playhead (Top Marker) -->
+                <div class="absolute inset-y-0 w-0.5 bg-primary z-50 pointer-events-none shadow-[0_0_10px_rgba(var(--primary),0.5)]" :style="{ left: (currentTime * PX_PER_SEC) + 'px' }">
+                  <div class="absolute -top-1 -left-[6px] w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-primary shadow-xl"></div>
                 </div>
               </div>
             </div>
 
-            <div class="flex flex-col">
-              <div class="flex min-h-[160px]">
-                <div class="w-32 shrink-0 border-r bg-muted/20 flex flex-col py-2">
-                  <div class="px-3 py-1 flex items-center gap-2 group hover:bg-muted/40 transition-colors cursor-default">
-                    <div class="w-2 h-2 rounded-full bg-primary/60"></div>
-                    <span class="text-[11px] font-semibold text-muted-foreground/80">Voice Track</span>
+            <div class="flex flex-col min-h-full">
+              <div class="flex flex-1 min-h-[200px]">
+                <div class="w-40 shrink-0 border-r bg-muted/10 flex flex-col py-4">
+                  <div class="px-4 py-2 flex items-center gap-3 group hover:bg-primary/5 transition-colors cursor-default rounded-r-lg">
+                    <div class="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_8px_rgba(var(--primary),0.6)]"></div>
+                    <span class="text-[11px] font-black uppercase tracking-widest text-foreground/70">Voice Track</span>
                   </div>
                 </div>
                 
-                <div class="flex-1 relative min-h-full py-2 bg-grid-slate-900/[0.04]" :style="{ width: (timelineDuration * PX_PER_SEC) + 'px' }">
+                <div class="flex-1 relative min-h-full py-4 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] dark:bg-[radial-gradient(#1f2937_1px,transparent_1px)]" :style="{ width: (timelineDuration * PX_PER_SEC) + 'px' }">
                   <!-- Global playhead line -->
-                  <div class="absolute inset-y-0 w-[1px] bg-primary/40 z-20 pointer-events-none" :style="{ left: (currentTime * PX_PER_SEC) + 'px' }"></div>
+                  <div class="absolute inset-y-0 w-px bg-primary/40 z-20 pointer-events-none shadow-[0_0_15px_rgba(var(--primary),0.3)]" :style="{ left: (currentTime * PX_PER_SEC) + 'px' }"></div>
 
-                  <!-- Clips -->
-                  <div class="relative h-24">
+                  <!-- Clips Container -->
+                  <div class="relative h-32">
                     <div 
                       v-for="block in store.blocks" 
                       :key="block.id"
-                      class="absolute top-2 h-14 rounded-md border-2 transition-shadow cursor-move flex flex-col overflow-hidden shadow-sm"
+                      class="absolute top-4 h-20 rounded-xl border-2 transition-all cursor-move flex flex-col overflow-hidden shadow-xl group/clip"
                       :class="{ 
-                        'border-primary bg-primary/10 shadow-lg ring-2 ring-primary/20 z-10': block.selected,
-                        'border-muted-foreground/40 bg-card/60': !block.selected,
-                        'opacity-50 grayscale': !block.audioUrl
+                        'border-primary bg-primary/20 shadow-primary/10 ring-4 ring-primary/10 z-10': block.selected,
+                        'border-border bg-card/80 hover:border-primary/40 hover:bg-card/90': !block.selected,
+                        'opacity-40 grayscale': !block.audioUrl
                       }"
                       :style="{
                         left: (block.timelineStart * PX_PER_SEC) + 'px',
-                        width: Math.max(10, ((block.endTime - block.startTime) / block.speed) * PX_PER_SEC) + 'px'
+                        width: Math.max(20, ((block.endTime - block.startTime) / block.speed) * PX_PER_SEC) + 'px'
                       }"
                       @mousedown="(e) => handleBlockMouseDown(e, block.id)"
                     >
-                      <div class="px-2 py-1 bg-muted/40 text-[10px] font-bold truncate border-b border-muted/50 group-hover:bg-muted transition-colors">
-                        {{ block.voice || 'Unknown' }}
+                      <div class="px-3 py-1.5 bg-muted/40 text-[10px] font-black uppercase tracking-widest truncate border-b border-muted/50 group-hover/clip:bg-primary/10 transition-colors flex items-center gap-2">
+                        <div class="w-1.5 h-1.5 rounded-full bg-primary/60"></div>
+                        {{ block.voice || 'Loading...' }}
                       </div>
-                      <div class="flex-1 p-1 flex items-center gap-1 overflow-hidden">
-                        <div v-if="block.audioUrl" class="w-full flex items-end gap-[1px] h-full opacity-60">
-                           <div v-for="i in 20" :key="i" class="flex-1 bg-primary/80" :style="{ height: `${20 + Math.random() * 80}%` }"></div>
+                      <div class="flex-1 p-2 flex items-center gap-1 overflow-hidden relative">
+                        <!-- Waveform visualization -->
+                        <div v-if="block.audioUrl" class="w-full h-full flex items-center gap-[2px] opacity-40">
+                           <div v-for="i in 30" :key="i" class="flex-1 bg-primary/60 rounded-full" :style="{ height: `${15 + Math.random() * 70}%` }"></div>
                         </div>
-                        <p v-else class="text-[9px] text-muted-foreground italic px-1">Generating...</p>
+                        <div v-else class="absolute inset-0 flex items-center justify-center bg-muted/20">
+                          <Loader2 class="h-4 w-4 animate-spin text-muted-foreground/40" />
+                        </div>
                       </div>
+                      
+                      <!-- Clip Handles (Visual Only for now) -->
+                      <div class="absolute inset-y-0 left-0 w-1.5 bg-primary/10 hover:bg-primary/40 cursor-ew-resize transition-colors"></div>
+                      <div class="absolute inset-y-0 right-0 w-1.5 bg-primary/10 hover:bg-primary/40 cursor-ew-resize transition-colors"></div>
                     </div>
                   </div>
 
                   <!-- Project End Marker -->
                   <div 
-                    class="absolute inset-y-0 w-2 group cursor-ew-resize z-40 transition-colors hover:bg-primary/20" 
+                    class="absolute inset-y-0 w-4 group cursor-ew-resize z-40 transition-all flex justify-center" 
                     :style="{ left: (store.projectDuration * PX_PER_SEC) + 'px' }"
                     @mousedown="handleDurationDrag"
                   >
-                    <div class="absolute top-0 -translate-x-1/2 bg-yellow-500 text-black font-bold text-[9px] px-1 rounded shadow-md">END</div>
-                    <div class="h-full w-[1px] bg-yellow-500/60 shadow-lg ml-[0.5px]"></div>
+                    <div class="absolute top-0 -translate-y-1/2 bg-amber-500 text-black font-black text-[9px] px-2 py-0.5 rounded shadow-xl tracking-tighter">END</div>
+                    <div class="h-full w-0.5 bg-amber-500/60 group-hover:bg-amber-500 transition-colors shadow-[0_0_15px_rgba(var(--amber-500),0.3)]"></div>
                   </div>
                 </div>
               </div>
